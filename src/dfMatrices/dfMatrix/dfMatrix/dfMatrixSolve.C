@@ -4,6 +4,7 @@
 #include <cstdio>
 #include "PstreamGlobals.H"
 #include "Residuals.H"
+#include "clockTime.H"
 
 namespace Foam{
 
@@ -15,17 +16,35 @@ SolverPerformance<Type> dfMatrix::solve(
     const FieldField<Field, Type>& boundaryCoeffs,
     const dictionary& solverControls
 ){
+    double misc_time = 0.;
+    double diag_copy_time = 0.;
+    double addBoundaryDiag_time = 0.;
+    double addBoundarySource_time = 0.;
+    double initMatrixInterfaces_time = 0.;
+    double updateMatrixInterfaces_time = 0.;
+    double build_solver_time = 0.;
+    double solver_solve_time = 0.;
+    double correctBoundaryConditions_time = 0.;
+
+    clockTime solveClock;
+
     SolverPerformance<Type> solverPerfVec
     (
         "dfMatrix::solve",
         psi.name()
     );
 
+    misc_time += solveClock.timeIncrement();
+
     scalarField saveDiag(diag());
 
     Field<Type> sourceCpy(source);
 
+    diag_copy_time += solveClock.timeIncrement();
+
     addBoundarySource(sourceCpy, psi, boundaryCoeffs);
+
+    addBoundarySource_time += solveClock.timeIncrement();
 
     typename Type::labelType validComponents
     (
@@ -38,11 +57,18 @@ SolverPerformance<Type> dfMatrix::solve(
 
         // copy field and source
         scalarField psiCmpt(psi.primitiveField().component(cmpt));
+
+        misc_time += solveClock.timeIncrement();
         
         addBoundaryDiag(diag(), internalCoeffs, cmpt);
+
+        addBoundaryDiag_time += solveClock.timeIncrement();
+
         const_cast<scalarField&>(ldu().diag()) = diag();
 
         scalarField sourceCmpt(sourceCpy.component(cmpt));
+
+        diag_copy_time += solveClock.timeIncrement();
 
         FieldField<Field, scalar> bouCoeffsCmpt
         (
@@ -57,6 +83,8 @@ SolverPerformance<Type> dfMatrix::solve(
         lduInterfaceFieldPtrsList interfaces =
             psi.boundaryField().scalarInterfaces();
 
+        misc_time += solveClock.timeIncrement();
+
         // Use the initMatrixInterfaces and updateMatrixInterfaces to correct
         // bouCoeffsCmpt for the explicit part of the coupled boundary
         // conditions
@@ -69,6 +97,8 @@ SolverPerformance<Type> dfMatrix::solve(
             cmpt
         );
 
+        initMatrixInterfaces_time += solveClock.timeIncrement();
+
         updateMatrixInterfaces
         (
             bouCoeffsCmpt,
@@ -78,10 +108,20 @@ SolverPerformance<Type> dfMatrix::solve(
             cmpt
         );
 
-        solverPerformance solverPerf;
+        updateMatrixInterfaces_time += solveClock.timeIncrement();
 
         // Solver call
-        solverPerf = dfMatrix::solver::New
+        // solverPerf = dfMatrix::solver::New
+        // (
+        //     psi.name() + pTraits<Type>::componentNames[cmpt],
+        //     *this,
+        //     bouCoeffsCmpt,
+        //     intCoeffsCmpt,
+        //     interfaces,
+        //     solverControls
+        // )->solve(psiCmpt, sourceCmpt, cmpt);
+
+        Foam::autoPtr<Foam::dfMatrix::solver> solver = dfMatrix::solver::New
         (
             psi.name() + pTraits<Type>::componentNames[cmpt],
             *this,
@@ -89,7 +129,13 @@ SolverPerformance<Type> dfMatrix::solve(
             intCoeffsCmpt,
             interfaces,
             solverControls
-        )->solve(psiCmpt, sourceCmpt, cmpt);
+        );
+
+        build_solver_time += solveClock.timeIncrement();
+
+        solverPerformance solverPerf = solver->solve(psiCmpt, sourceCmpt, cmpt);
+
+        solver_solve_time += solveClock.timeIncrement(); 
 
         if (SolverPerformance<Type>::debug)
         {
@@ -101,14 +147,36 @@ SolverPerformance<Type> dfMatrix::solve(
 
         psi.primitiveFieldRef().replace(cmpt, psiCmpt);
 
+        misc_time += solveClock.timeIncrement();
+
         diag() = saveDiag;
-        const_cast<scalarField&>(ldu().diag()) = saveDiag;;
+        const_cast<scalarField&>(ldu().diag()) = saveDiag;
+
+        diag_copy_time += solveClock.timeIncrement();
     }
 
     psi.correctBoundaryConditions();
 
+    correctBoundaryConditions_time += solveClock.timeIncrement();
+
     Residuals<Type>::append(psi.mesh(), solverPerfVec);
 
+    misc_time += solveClock.timeIncrement();
+    double solve_time = solveClock.elapsedTime();
+
+    // print time
+    Info << "dfMatrix::solve profiling -----------------------------------------------------------------" << endl;
+    Info << "solve time : " << solve_time << endl;
+    Info << "diag_copy time : " << diag_copy_time << ", " << diag_copy_time / solve_time * 100 << "%" << endl;
+    Info << "addBoundaryDiag time : " << addBoundaryDiag_time << ", " << addBoundaryDiag_time / solve_time * 100 << "%" << endl;
+    Info << "addBoundarySource time : " << addBoundarySource_time << ", " << addBoundarySource_time / solve_time * 100 << "%" << endl;
+    Info << "initMatrixInterfaces time : " << initMatrixInterfaces_time << ", " << initMatrixInterfaces_time / solve_time * 100 << "%" << endl;
+    Info << "updateMatrixInterfaces time : " << updateMatrixInterfaces_time << ", " << updateMatrixInterfaces_time / solve_time * 100 << "%" << endl;
+    Info << "build_solver time : " << build_solver_time << ", " << build_solver_time / solve_time * 100 << "%" << endl;
+    Info << "solver_solve time : " << solver_solve_time << ", " << solver_solve_time / solve_time * 100 << "%" << endl;
+    Info << "correctBoundaryConditions time : " << correctBoundaryConditions_time << ", " << correctBoundaryConditions_time / solve_time * 100 << "%" << endl;
+    Info << "misc time : " << misc_time << ", " << misc_time / solve_time * 100 << "%" << endl;
+    Info << "----------------------------------------------------------------------------------------" << endl;
     return solverPerfVec;
 }
 
@@ -122,13 +190,36 @@ solverPerformance dfMatrix::solve
     const dictionary& solverControls
 )
 {
+    double misc_time = 0.;
+    double diag_copy_time = 0.;
+    double addBoundaryDiag_time = 0.;
+    double addBoundarySource_time = 0.;
+    double build_solver_time = 0.;
+    double solver_solve_time = 0.;
+    double correctBoundaryConditions_time = 0.;
+
+    clockTime solveClock;
+
     scalarField saveDiag(diag());
+
+    diag_copy_time += solveClock.timeIncrement();
+
     // addBoundaryDiag(diag(), internalCoeffs, 0);
     addBoundaryDiag(diag(), internalCoeffs, 0);
+
+    addBoundaryDiag_time += solveClock.timeIncrement();
+
     const_cast<scalarField&>(ldu().diag()) = diag();
 
+    diag_copy_time += solveClock.timeIncrement();
+
     scalarField sourceCpy(source);
+
+    diag_copy_time += solveClock.timeIncrement();
+
     addBoundarySource(sourceCpy, psi, boundaryCoeffs, false);
+
+    addBoundarySource_time += solveClock.timeIncrement();
 
     Foam::autoPtr<Foam::dfMatrix::solver> solver = dfMatrix::solver::New
     (
@@ -139,9 +230,13 @@ solverPerformance dfMatrix::solve
         psi.boundaryField().scalarInterfaces(),
         solverControls
     );
+
+    build_solver_time += solveClock.timeIncrement();
     
     // Solver call
     solverPerformance solverPerf = solver->solve(psi.primitiveFieldRef(), sourceCpy);
+
+    solver_solve_time += solveClock.timeIncrement();
 
     if (solverPerformance::debug)
     {
@@ -151,13 +246,28 @@ solverPerformance dfMatrix::solve
     diag() = saveDiag;
     const_cast<scalarField&>(ldu().diag()) = saveDiag;
 
+    diag_copy_time += solveClock.timeIncrement();
+
     psi.correctBoundaryConditions();
+
+    correctBoundaryConditions_time += solveClock.timeIncrement();
 
     Residuals<scalar>::append(psi.mesh(), solverPerf);
 
-#ifdef _PROFILING_
-    solver->print_time();
-#endif    
+    misc_time += solveClock.timeIncrement();
+    double solve_time = solveClock.elapsedTime();
+
+    // print time
+    Info << "dfMatrix::solve profiling -----------------------------------------------------------------" << endl;
+    Info << "solve time : " << solve_time << endl;
+    Info << "diag_copy time : " << diag_copy_time << ", " << diag_copy_time / solve_time * 100 << "%" << endl;
+    Info << "addBoundaryDiag time : " << addBoundaryDiag_time << ", " << addBoundaryDiag_time / solve_time * 100 << "%" << endl;
+    Info << "addBoundarySource time : " << addBoundarySource_time << ", " << addBoundarySource_time / solve_time * 100 << "%" << endl;
+    Info << "build_solver time : " << build_solver_time << ", " << build_solver_time / solve_time * 100 << "%" << endl;
+    Info << "solver_solve time : " << solver_solve_time << ", " << solver_solve_time / solve_time * 100 << "%" << endl;
+    Info << "correctBoundaryConditions time : " << correctBoundaryConditions_time << ", " << correctBoundaryConditions_time / solve_time * 100 << "%" << endl;
+    Info << "misc time : " << misc_time << ", " << misc_time / solve_time * 100 << "%" << endl;
+    Info << "----------------------------------------------------------------------------------------" << endl;
 
     return solverPerf;
 }

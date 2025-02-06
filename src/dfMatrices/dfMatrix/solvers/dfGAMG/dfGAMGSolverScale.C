@@ -91,7 +91,6 @@ void Foam::dfGAMGSolver::scale
     const direction cmpt
 ) const
 {
-    double start = MPI_Wtime();
     A.Amul
     (
         Acf,
@@ -100,8 +99,6 @@ void Foam::dfGAMGSolver::scale
         interfaceLevel,
         cmpt
     );
-    double end = MPI_Wtime();
-    scale_spmv_time += end - start;
 
     scalar scalingFactorNum = 0.0;
     scalar scalingFactorDenom = 0.0;

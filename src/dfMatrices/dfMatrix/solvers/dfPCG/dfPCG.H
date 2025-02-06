@@ -60,7 +60,7 @@ public:
     mutable double allreduce_time = 0.;
 
     void print_time() const {
-        double other_time = solve_time - spmv_time - normFactor_time - gSumMag_time - gSumProd_time - localUpdate_time - precondition_time - misc_time - allreduce_time;
+        // double other_time = solve_time - spmv_time - normFactor_time - gSumMag_time - gSumProd_time - localUpdate_time - precondition_time - misc_time - allreduce_time;
         Info << "dfPCG solve profiling -----------------------------------------------------------------" << endl;
         Info << "solve time : " << solve_time << endl;
         Info << "spmv time : " << spmv_time << ", " << spmv_time / solve_time * 100 << "%" << endl;
@@ -71,7 +71,7 @@ public:
         Info << "precondition time : " << precondition_time << ", " << precondition_time / solve_time * 100 << "%" << endl;
         Info << "allreduce time : " << allreduce_time << ", " << allreduce_time / solve_time * 100 << "%" << endl;
         Info << "misc time : " << misc_time << ", " << misc_time / solve_time * 100 << "%" << endl;
-        Info << "other time : " << other_time << ", " << other_time / solve_time * 100 << "%" << endl;
+        // Info << "other time : " << other_time << ", " << other_time / solve_time * 100 << "%" << endl;
         Info << "----------------------------------------------------------------------------------------" << endl;
         preconPtr_->print_time();
     }

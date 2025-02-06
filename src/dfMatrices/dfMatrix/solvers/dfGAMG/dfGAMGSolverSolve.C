@@ -28,6 +28,7 @@ License
 #include "dfPBiCGStab.H"
 #include "SubField.H"
 #include <mpi.h>
+#include "clockTime.H"
 
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 
@@ -38,19 +39,30 @@ Foam::solverPerformance Foam::dfGAMGSolver::solve
     const direction cmpt
 ) const
 {
+    clockTime solveClock;
+
     // Setup class containing solver performance data
     solverPerformance solverPerf(typeName, fieldName_);
 
     // Calculate A.psi used to calculate the initial residual
     scalarField Apsi(psi.size());
+
+    misc_time += solveClock.timeIncrement();
+
     matrix_.Amul(Apsi, psi, interfaceBouCoeffs_, interfaces_, cmpt);
+
+    spmv_time += solveClock.timeIncrement();
 
     // Create the storage for the finestCorrection which may be used as a
     // temporary in normFactor
     scalarField finestCorrection(psi.size());
 
+    misc_time += solveClock.timeIncrement();
+
     // Calculate normalisation factor
     scalar normFactor = this->normFactor(psi, source, Apsi, finestCorrection);
+
+    normFactor_time += solveClock.timeIncrement();
 
     if (debug >= 2)
     {
@@ -60,14 +72,13 @@ Foam::solverPerformance Foam::dfGAMGSolver::solve
     // Calculate initial finest-grid residual field
     scalarField finestResidual(source - Apsi);
 
+    vector_update_time += solveClock.timeIncrement();
+
     // Calculate normalised residual for convergence test
-    solverPerf.initialResidual() = gSumMag
-    (
-        finestResidual,
-        matrix().mesh().comm()
-    )/normFactor;
+    solverPerf.initialResidual() = gSumMag(finestResidual,matrix().mesh().comm())/normFactor;
     solverPerf.finalResidual() = solverPerf.initialResidual();
 
+    gSumMag_time += solveClock.timeIncrement();
 
     // Check convergence, solve if not converged
     if
@@ -90,6 +101,8 @@ Foam::solverPerformance Foam::dfGAMGSolver::solve
         scalarField scratch1;
         scalarField scratch2;
 
+        misc_time += solveClock.timeIncrement();
+
         // Initialise the above data structures
         initVcycle
         (
@@ -99,6 +112,8 @@ Foam::solverPerformance Foam::dfGAMGSolver::solve
             scratch1,
             scratch2
         );
+
+        initVcycle_time += solveClock.timeIncrement();
 
         do
         {
@@ -119,16 +134,21 @@ Foam::solverPerformance Foam::dfGAMGSolver::solve
                 cmpt
             );
 
+            Vcycle_time += solveClock.timeIncrement();
+
             // Calculate finest level residual field
             matrix_.Amul(Apsi, psi, interfaceBouCoeffs_, interfaces_, cmpt);
+
+            spmv_time += solveClock.timeIncrement();
+
             finestResidual = source;
             finestResidual -= Apsi;
 
-            solverPerf.finalResidual() = gSumMag
-            (
-                finestResidual,
-                matrix().mesh().comm()
-            )/normFactor;
+            vector_update_time += solveClock.timeIncrement();
+
+            solverPerf.finalResidual() = gSumMag(finestResidual,matrix().mesh().comm())/normFactor;
+
+            gSumMag_time += solveClock.timeIncrement();
 
             if (debug >= 2)
             {
@@ -143,6 +163,10 @@ Foam::solverPerformance Foam::dfGAMGSolver::solve
          || solverPerf.nIterations() < minIter_
         );
     }
+    misc_time += solveClock.timeIncrement();
+    solve_time += solveClock.elapsedTime();
+
+    print_time();
 
     return solverPerf;
 }
@@ -165,23 +189,15 @@ void Foam::dfGAMGSolver::Vcycle
     const direction cmpt
 ) const
 {
-    double spmv_start, spmv_end;
-    double smooth_start, smooth_end;
-    double scale_start, scale_end;
-    double interpolate_start, interpolate_end;
-    double restrictField_start, restrictField_end;
-    double prolongField_start, prolongField_end;
-    double solveCoarsest_start, solveCoarsest_end;
 
-    double Vcycle_start = MPI_Wtime();
+    clockTime vCycleClock;
 
     const label coarsestLevel = matrixLevels_.size() - 1;
     
     // Restrict finest grid residual for the next level up.
-    restrictField_start = MPI_Wtime();
     agglomeration_.restrictField(coarseSources[0], finestResidual, 0, true);
-    restrictField_end = MPI_Wtime();
-    restrictField_time += restrictField_end - restrictField_start;
+
+    restrictField_time += vCycleClock.timeIncrement();
 
     // Residual restriction (going to coarser levels)
     for (label leveli = 0; leveli < coarsestLevel; leveli++)
@@ -194,7 +210,6 @@ void Foam::dfGAMGSolver::Vcycle
             {
                 coarseCorrFields[leveli] = 0.0;
 
-                smooth_start = MPI_Wtime();
                 smoothers[leveli + 1].smooth
                 (
                     coarseCorrFields[leveli],
@@ -206,8 +221,7 @@ void Foam::dfGAMGSolver::Vcycle
                         maxPreSweeps_
                     )
                 );
-                smooth_end = MPI_Wtime();
-                smooth_time += smooth_end - smooth_start;
+                smooth_time += vCycleClock.timeIncrement();
 
                 scalarField::subField ACf
                 (
@@ -215,9 +229,10 @@ void Foam::dfGAMGSolver::Vcycle
                     coarseCorrFields[leveli].size()
                 );
 
+                Vcycle_misc_time += vCycleClock.timeIncrement();
+
                 // Scale coarse-grid correction field
                 // but not on the coarsest level because it evaluates to 1
-                scale_start = MPI_Wtime();
                 if (scaleCorrection_ && leveli < coarsestLevel - 1)
                 {
                     scale
@@ -234,10 +249,8 @@ void Foam::dfGAMGSolver::Vcycle
                         cmpt
                     );
                 }
-                scale_end = MPI_Wtime();
-                scale_time += scale_end - scale_start;
+                scale_time += vCycleClock.timeIncrement();
 
-                spmv_start = MPI_Wtime();
                 dfMatrixLevels_[leveli].Amul
                 (
                     const_cast<scalarField&>
@@ -249,14 +262,14 @@ void Foam::dfGAMGSolver::Vcycle
                     interfaceLevels_[leveli],
                     cmpt
                 );
-                spmv_end = MPI_Wtime();
-                spmv_time += spmv_end - spmv_start;
+                Vcycle_spmv_time += vCycleClock.timeIncrement();
 
                 coarseSources[leveli] -= ACf;
+
+                Vcycle_vector_update_time += vCycleClock.timeIncrement();
             }
 
             // Residual is equal to source
-            restrictField_start = MPI_Wtime();
             agglomeration_.restrictField
             (
                 coarseSources[leveli + 1],
@@ -264,13 +277,11 @@ void Foam::dfGAMGSolver::Vcycle
                 leveli + 1,
                 true
             );
-            restrictField_end = MPI_Wtime();
-            restrictField_time += restrictField_end - restrictField_start;
+            restrictField_time += vCycleClock.timeIncrement();
         }
     }
 
     // smooth Coarsest level
-    smooth_start = MPI_Wtime();
     if(nCoarsestSweeps_ > 0){
         smoothers[coarsestLevel + 1].smooth
         (
@@ -280,12 +291,10 @@ void Foam::dfGAMGSolver::Vcycle
             nCoarsestSweeps_
         );
     }
-    smooth_end = MPI_Wtime();
-    smooth_time += smooth_end - smooth_start;
+    smooth_time += vCycleClock.timeIncrement();
 
 
     // Solve Coarsest level with either an iterative or direct solver
-    solveCoarsest_start = MPI_Wtime();
     if (solveCoarsest_ && coarseCorrFields.set(coarsestLevel))
     {
         solveCoarsestLevel
@@ -294,12 +303,13 @@ void Foam::dfGAMGSolver::Vcycle
             coarseSources[coarsestLevel]
         );
     }
-    solveCoarsest_end = MPI_Wtime();
-    solveCoarsest_time += solveCoarsest_end - solveCoarsest_start;
+    solveCoarsest_time += vCycleClock.timeIncrement();
     // Smoothing and prolongation of the coarse correction fields
     // (going to finer levels)
 
     scalarField dummyField(0);
+
+    Vcycle_misc_time += vCycleClock.timeIncrement();
 
     for (label leveli = coarsestLevel - 1; leveli >= 0; leveli--)
     {
@@ -314,6 +324,8 @@ void Foam::dfGAMGSolver::Vcycle
                 coarseCorrFields[leveli].size()
             );
 
+            Vcycle_misc_time += vCycleClock.timeIncrement();
+
             // Only store the preSmoothedCoarseCorrField if pre-smoothing is
             // used
             if (nPreSweeps_)
@@ -321,7 +333,8 @@ void Foam::dfGAMGSolver::Vcycle
                 preSmoothedCoarseCorrField = coarseCorrFields[leveli];
             }
 
-            prolongField_start = MPI_Wtime();
+            Vcycle_misc_time += vCycleClock.timeIncrement();
+
             agglomeration_.prolongField
             (
                 coarseCorrFields[leveli],
@@ -333,8 +346,7 @@ void Foam::dfGAMGSolver::Vcycle
                 leveli + 1,
                 true
             );
-            prolongField_end = MPI_Wtime();
-            prolongField_time += prolongField_end - prolongField_start;
+            prolongField_time += vCycleClock.timeIncrement();
 
             // Create A.psi for this coarse level as a sub-field of Apsi
             scalarField::subField ACf
@@ -345,7 +357,8 @@ void Foam::dfGAMGSolver::Vcycle
             scalarField& ACfRef =
                 const_cast<scalarField&>(ACf.operator const scalarField&());
 
-            interpolate_start = MPI_Wtime();
+            Vcycle_misc_time += vCycleClock.timeIncrement();
+
             if (interpolateCorrection_) //&& leveli < coarsestLevel - 2)
             {
                 if (coarseCorrFields.set(leveli+1))
@@ -375,12 +388,10 @@ void Foam::dfGAMGSolver::Vcycle
                     );
                 }
             }
-            interpolate_end = MPI_Wtime();
-            interpolate_time += interpolate_end - interpolate_start;
+            interpolate_time += vCycleClock.timeIncrement();
 
             // Scale coarse-grid correction field
             // but not on the coarsest level because it evaluates to 1
-            scale_start = MPI_Wtime();
             if
             (
                 scaleCorrection_
@@ -398,8 +409,7 @@ void Foam::dfGAMGSolver::Vcycle
                     cmpt
                 );
             }
-            scale_end = MPI_Wtime();
-            scale_time += scale_end - scale_start;
+            scale_time += vCycleClock.timeIncrement();
 
             // Only add the preSmoothedCoarseCorrField if pre-smoothing is
             // used
@@ -408,7 +418,8 @@ void Foam::dfGAMGSolver::Vcycle
                 coarseCorrFields[leveli] += preSmoothedCoarseCorrField;
             }
 
-            smooth_start = MPI_Wtime();
+            Vcycle_misc_time += vCycleClock.timeIncrement();
+
             smoothers[leveli + 1].smooth
             (
                 coarseCorrFields[leveli],
@@ -420,13 +431,11 @@ void Foam::dfGAMGSolver::Vcycle
                     maxPostSweeps_
                 )
             );
-            smooth_end = MPI_Wtime();
-            smooth_time += smooth_end - smooth_start;
+            smooth_time += vCycleClock.timeIncrement();
         }
     }
 
     // Prolong the finest level correction
-    prolongField_start = MPI_Wtime();
     agglomeration_.prolongField
     (
         finestCorrection,
@@ -434,10 +443,8 @@ void Foam::dfGAMGSolver::Vcycle
         0,
         true
     );
-    prolongField_end = MPI_Wtime();
-    prolongField_time += prolongField_end - prolongField_start;
+    prolongField_time += vCycleClock.timeIncrement();
 
-    interpolate_start = MPI_Wtime();
     if (interpolateCorrection_)
     {
         interpolate
@@ -452,11 +459,8 @@ void Foam::dfGAMGSolver::Vcycle
             cmpt
         );
     }
-    interpolate_end = MPI_Wtime();
-    interpolate_time += interpolate_end - interpolate_start;
+    interpolate_time += vCycleClock.timeIncrement();
 
-
-    scale_start = MPI_Wtime();
     if (scaleCorrection_)
     {
         // Scale the finest level correction
@@ -471,8 +475,7 @@ void Foam::dfGAMGSolver::Vcycle
             cmpt
         );
     }
-    scale_end = MPI_Wtime();
-    scale_time += scale_end - scale_start;
+    scale_time += vCycleClock.timeIncrement();
 
 
     forAll(psi, i)
@@ -480,7 +483,8 @@ void Foam::dfGAMGSolver::Vcycle
         psi[i] += finestCorrection[i];
     }
 
-    smooth_start = MPI_Wtime();
+    Vcycle_vector_update_time += vCycleClock.timeIncrement();
+
     if(nFinestSweeps_ > 0){
         smoothers[0].smooth
         (
@@ -490,12 +494,9 @@ void Foam::dfGAMGSolver::Vcycle
             nFinestSweeps_
         );
     }
-    smooth_end = MPI_Wtime();
-    smooth_time += smooth_end - smooth_start;
+    smooth_time += vCycleClock.timeIncrement();
 
-    double Vcycle_end = MPI_Wtime();
-    Vcycle_time += Vcycle_end - Vcycle_start;
-
+    Vcycle_total_time += vCycleClock.elapsedTime();
 }
 
 void Foam::dfGAMGSolver::initVcycle
@@ -527,6 +528,8 @@ void Foam::dfGAMGSolver::initVcycle
             controlDict_
         )
     );
+
+    
     
     forAll(matrixLevels_, leveli)
     {

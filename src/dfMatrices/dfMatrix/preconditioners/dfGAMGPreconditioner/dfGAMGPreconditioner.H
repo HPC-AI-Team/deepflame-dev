@@ -107,8 +107,6 @@ public:
         Info << "smooth time : " << smooth_time << ", " << smooth_time / procondition_time * 100 << "%" << endl;
         Info << "scale time : " << scale_time << ", " << scale_time / procondition_time * 100 << "%" << endl;
         Info << "interpolate time : " << interpolate_time << ", " << interpolate_time / procondition_time * 100 << "%" << endl;
-        Info << "scale spmv time : " << scale_spmv_time << ", " << scale_spmv_time / procondition_time * 100 << "%" << endl;
-        Info << "interpolate spmv time : " << interpolate_spmv_time << ", " << interpolate_spmv_time / procondition_time * 100 << "%" << endl;
         Info << "restrictField time : " << restrictField_time << ", " << restrictField_time / procondition_time * 100 << "%" << endl;
         Info << "prolongField time : " << prolongField_time << ", " << prolongField_time / procondition_time * 100 << "%" << endl;
         Info << "solveCoarsest time : " << solveCoarsest_time << ", " << solveCoarsest_time / procondition_time * 100 << "%" << endl;

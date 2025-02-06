@@ -366,17 +366,60 @@ public:
             const direction cmpt=0
         ) const;
 
-        // profiling
-        mutable double Vcycle_time = 0.;
+
+
+        mutable double solve_time = 0;
         mutable double spmv_time = 0.;
+        mutable double normFactor_time = 0.;
+        mutable double initVcycle_time = 0.;
+        mutable double Vcycle_time = 0.;
+        mutable double vector_update_time = 0.;
+        mutable double gSumMag_time = 0.;
+        mutable double allreduce_time = 0.;
+        mutable double misc_time = 0.;
+
+
+        mutable double Vcycle_total_time = 0.;
         mutable double smooth_time = 0.;
         mutable double scale_time = 0.;
-        mutable double scale_spmv_time = 0.;
-        mutable double interpolate_spmv_time = 0.;
         mutable double interpolate_time = 0.;
         mutable double restrictField_time = 0.;
         mutable double prolongField_time = 0.;
         mutable double solveCoarsest_time = 0.;
+        mutable double Vcycle_vector_update_time = 0.;
+        mutable double Vcycle_spmv_time = 0.;
+        mutable double Vcycle_misc_time = 0.;
+
+
+        void print_time() const {
+            // double Vcycle_other_time = Vcycle_total_time - smooth_time - scale_time - interpolate_time - restrictField_time - prolongField_time - solveCoarsest_time - Vcycle_vector_update_time - Vcycle_spmv_time - Vcycle_misc_time;
+            Info << "dfGAMG Vcycle solve profiling -----------------------------------------------------------------" << endl;
+            Info << "Vcycle_total time : " << Vcycle_total_time << endl;
+            Info << "smooth time : " << smooth_time << ", " << smooth_time / Vcycle_total_time * 100 << "%" << endl;
+            Info << "scale time : " << scale_time << ", " << scale_time / Vcycle_total_time * 100 << "%" << endl;
+            Info << "interpolate time : " << interpolate_time << ", " << interpolate_time / Vcycle_total_time * 100 << "%" << endl;
+            Info << "restrictField time : " << restrictField_time << ", " << restrictField_time / Vcycle_total_time * 100 << "%" << endl;
+            Info << "prolongField time : " << prolongField_time << ", " << prolongField_time / Vcycle_total_time * 100 << "%" << endl;
+            Info << "solveCoarsest time : " << solveCoarsest_time << ", " << solveCoarsest_time / Vcycle_total_time * 100 << "%" << endl;
+            Info << "Vcycle_vector_update time : " << Vcycle_vector_update_time << ", " << Vcycle_vector_update_time / Vcycle_total_time * 100 << "%" << endl;
+            Info << "Vcycle_spmv time : " << Vcycle_spmv_time << ", " << Vcycle_spmv_time / Vcycle_total_time * 100 << "%" << endl;
+            Info << "Vcycle_misc time : " << Vcycle_misc_time << ", " << Vcycle_misc_time / Vcycle_total_time * 100 << "%" << endl;
+            // Info << "Vcycle_other time : " << Vcycle_other_time << ", " << Vcycle_other_time / Vcycle_total_time * 100 << "%" << endl;
+            Info << "----------------------------------------------------------------------------------------" << endl; 
+            // double other_time = solve_time - spmv_time - normFactor_time - initVcycle_time - Vcycle_time - vector_update_time - gSumMag_time - misc_time - allreduce_time;
+            Info << "dfGAMG solve profiling -----------------------------------------------------------------" << endl;
+            Info << "solve time : " << solve_time << endl;
+            Info << "spmv time : " << spmv_time << ", " << spmv_time / solve_time * 100 << "%" << endl;
+            Info << "normFactor time : " << normFactor_time << ", " << normFactor_time / solve_time * 100 << "%" << endl;
+            Info << "initVcycle time : " << initVcycle_time << ", " << initVcycle_time / solve_time * 100 << "%" << endl;
+            Info << "Vcycle time : " << Vcycle_time << ", " << Vcycle_time / solve_time * 100 << "%" << endl;
+            Info << "vector_update time : " << vector_update_time << ", " << vector_update_time / solve_time * 100 << "%" << endl;
+            Info << "gSumMag time : " << gSumMag_time << ", " << gSumMag_time / solve_time * 100 << "%" << endl;
+            Info << "misc time : " << misc_time << ", " << misc_time / solve_time * 100 << "%" << endl;
+            // Info << "other time : " << other_time << ", " << other_time / solve_time * 100 << "%" << endl;
+            Info << "----------------------------------------------------------------------------------------" << endl;
+
+        }
 };
 
 
