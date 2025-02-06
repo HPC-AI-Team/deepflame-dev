@@ -3,6 +3,7 @@
 #include <mpi.h>
 #include "dfCSRSubMatrix.H"
 #include "env.H"
+#include <omp.h>
 
 namespace Foam{
 
@@ -142,6 +143,7 @@ void dfBlockMatrix::SpMV(scalar* const __restrict__ ApsiPtr, const scalar* const
     // Pout << "Enter dfBlockMatrix::SpMV(scalar* const __restrict__ ApsiPtr, const scalar* const __restrict__ psiPtr)" << endl << flush;
     const scalar* const __restrict__ diagPtr = diag().begin();
 
+    #pragma omp parallel for
     for(label rbid = 0; rbid < rowBlockCount_; ++rbid){
         label rowOffset = rowBlockPtr_[rbid];
         label rowLen = rowBlockPtr_[rbid + 1] - rowBlockPtr_[rbid];
@@ -161,44 +163,114 @@ void dfBlockMatrix::SpMV(scalar* const __restrict__ ApsiPtr, const scalar* const
             csrSubMatrix.SpMV(ApsiPtr_offset, psiPtr + colOffset);
         }
     }
-
     // Pout << "Exit dfBlockMatrix::SpMV(scalar* const __restrict__ ApsiPtr, const scalar* const __restrict__ psiPtr)" << endl << flush;
+}
+
+void dfBlockMatrix::SumA(scalar* const __restrict__ sumAPtr) const {
+    const scalar* const __restrict__ diagPtr = diag().begin();
+
+    #pragma omp parallel for
+    for(label rbid = 0; rbid < rowBlockCount_; ++rbid){
+        label rowOffset = rowBlockPtr_[rbid];
+        label rowLen = rowBlockPtr_[rbid + 1] - rowBlockPtr_[rbid];
+        scalar* const __restrict__ sumAPtr_offset = sumAPtr + rowOffset;
+        const scalar* const __restrict__ diagPtr_offset = diagPtr + rowOffset;
+        for(label r = 0; r < rowLen; ++r){
+            sumAPtr_offset[r] = diagPtr_offset[r];
+        }
+        for(label cbid = 0; cbid < rowBlockCount_; ++cbid){
+            label bid = bid2d(rbid, cbid);
+            if(blocks_[bid] == nullptr){
+                continue;
+            }
+            const dfBlockSubMatrix& csrSubMatrix = *blocks_[bid];
+            label colOffset = rowBlockPtr_[cbid];
+            csrSubMatrix.SumA(sumAPtr_offset);
+        }
+    }
 }
 
 void dfBlockMatrix::GaussSeidel(scalar* const __restrict__ psiPtr, scalar* const __restrict__ bPrimePtr) const {
     // Pout << "Enter dfBlockMatrix::GaussSeidel(scalar* const __restrict__ psiPtr, scalar* const __restrict__ bPrimePtr)" << endl << flush;
     const scalar* const __restrict__ diagPtr = diag().begin();
 
-    for(label rbid = 0; rbid < rowBlockCount_; ++rbid){
-        label rowOffset = rowBlockPtr_[rbid];
-        label rowLen = rowBlockPtr_[rbid+1] - rowBlockPtr_[rbid];
-        scalar* const __restrict__ bPrimePtr_offset = bPrimePtr + rowOffset;
-        const scalar* const __restrict__ diagPtr_offset = diagPtr + rowOffset;
+    #pragma omp parallel
+    {
+        int thread_rank = omp_get_thread_num();
+        int thread_size = omp_get_num_threads();
+        label rb_start = rowBlockCount_ * thread_rank / thread_size;
+        label rb_end = rowBlockCount_ * (thread_rank + 1) / thread_size;
 
-        // B = b - (L + U) * x
-        for(label cbid = 0; cbid < rowBlockCount_; ++cbid){
-            label bid = bid2d(rbid, cbid);
-            if(rbid == cbid)
-                continue;
-            if(blocks_[bid] == nullptr)
-                continue;
-            label colOffset = rowBlockPtr_[cbid];
-            const dfBlockSubMatrix& offDiagBlock = *blocks_[bid];
-            offDiagBlock.BsubApsi(bPrimePtr_offset, psiPtr + colOffset);
-        }
-        label diagBlockIndex = bid2d(rbid, rbid);
-        scalar* const __restrict__ psiPtr_offset = psiPtr + rowOffset;
-        if(blocks_[diagBlockIndex] == nullptr){
-            //  x = B / diag
-            for(label r = 0; r < rowLen; ++r){
-                psiPtr_offset[r] = bPrimePtr_offset[r] / diagPtr_offset[r];
+        for(label rbid = rb_start; rbid < rb_end; ++rbid){
+            label rowOffset = rowBlockPtr_[rbid];
+            label rowLen = rowBlockPtr_[rbid+1] - rowBlockPtr_[rbid];
+            scalar* const __restrict__ bPrimePtr_offset = bPrimePtr + rowOffset;
+            const scalar* const __restrict__ diagPtr_offset = diagPtr + rowOffset;
+
+            // B = b - (L + U) * x
+            for(label cbid = 0; cbid < rowBlockCount_; ++cbid){
+                label bid = bid2d(rbid, cbid);
+                if(rbid == cbid)
+                    continue;
+                if(blocks_[bid] == nullptr)
+                    continue;
+                label colOffset = rowBlockPtr_[cbid];
+                const dfBlockSubMatrix& offDiagBlock = *blocks_[bid];
+                offDiagBlock.BsubApsi(bPrimePtr_offset, psiPtr + colOffset);
             }
-        }else{
-            const dfBlockSubMatrix& diagBlock = *blocks_[diagBlockIndex];
-            diagBlock.GaussSeidel(psiPtr_offset, bPrimePtr_offset, diagPtr_offset);
         }
 
+        #pragma omp barrier
+
+        for(label rbid = rb_start; rbid < rb_end; ++rbid){
+            label rowOffset = rowBlockPtr_[rbid];
+            label rowLen = rowBlockPtr_[rbid+1] - rowBlockPtr_[rbid];
+            scalar* const __restrict__ bPrimePtr_offset = bPrimePtr + rowOffset;
+            const scalar* const __restrict__ diagPtr_offset = diagPtr + rowOffset;
+
+            label diagBlockIndex = bid2d(rbid, rbid);
+            scalar* const __restrict__ psiPtr_offset = psiPtr + rowOffset;
+            if(blocks_[diagBlockIndex] == nullptr){
+                //  x = B / diag
+                for(label r = 0; r < rowLen; ++r){
+                    psiPtr_offset[r] = bPrimePtr_offset[r] / diagPtr_offset[r];
+                }
+            }else{
+                const dfBlockSubMatrix& diagBlock = *blocks_[diagBlockIndex];
+                diagBlock.GaussSeidel(psiPtr_offset, bPrimePtr_offset, diagPtr_offset);
+            }
+        }
     }
+    // for(label rbid = 0; rbid < rowBlockCount_; ++rbid){
+    //     label rowOffset = rowBlockPtr_[rbid];
+    //     label rowLen = rowBlockPtr_[rbid+1] - rowBlockPtr_[rbid];
+    //     scalar* const __restrict__ bPrimePtr_offset = bPrimePtr + rowOffset;
+    //     const scalar* const __restrict__ diagPtr_offset = diagPtr + rowOffset;
+
+    //     // B = b - (L + U) * x
+    //     for(label cbid = 0; cbid < rowBlockCount_; ++cbid){
+    //         label bid = bid2d(rbid, cbid);
+    //         if(rbid == cbid)
+    //             continue;
+    //         if(blocks_[bid] == nullptr)
+    //             continue;
+    //         label colOffset = rowBlockPtr_[cbid];
+    //         const dfBlockSubMatrix& offDiagBlock = *blocks_[bid];
+    //         offDiagBlock.BsubApsi(bPrimePtr_offset, psiPtr + colOffset);
+    //     }
+
+    //     label diagBlockIndex = bid2d(rbid, rbid);
+    //     scalar* const __restrict__ psiPtr_offset = psiPtr + rowOffset;
+    //     if(blocks_[diagBlockIndex] == nullptr){
+    //         //  x = B / diag
+    //         for(label r = 0; r < rowLen; ++r){
+    //             psiPtr_offset[r] = bPrimePtr_offset[r] / diagPtr_offset[r];
+    //         }
+    //     }else{
+    //         const dfBlockSubMatrix& diagBlock = *blocks_[diagBlockIndex];
+    //         diagBlock.GaussSeidel(psiPtr_offset, bPrimePtr_offset, diagPtr_offset);
+    //     }
+    // }
     // Pout << "Exit dfBlockMatrix::GaussSeidel(scalar* const __restrict__ psiPtr, scalar* const __restrict__ bPrimePtr)" << endl << flush;
 }
 
@@ -207,11 +279,13 @@ void dfBlockMatrix::Jacobi(scalar* const __restrict__ psiPtr, scalar* const __re
     const scalar* const __restrict__ diagPtr = diag().begin();
 
     std::unique_ptr<scalar[]> psiOldPtr = std::make_unique<scalar[]>(n_);
-
+    
+    #pragma omp parallel for
     for(label r = 0; r < n_; ++r){
         psiOldPtr[r] = psiPtr[r];
     }
 
+    #pragma omp parallel for
     for(label rbid = 0; rbid < rowBlockCount_; ++rbid){
         label rowOffset = rowBlockPtr_[rbid];
         label rowLen = rowBlockPtr_[rbid+1] - rowBlockPtr_[rbid];

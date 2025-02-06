@@ -470,6 +470,16 @@ int main(int argc, char *argv[])
         Info<< "pEqn post                    = " << time_monitor_pEqn_post << " s" << endl;
 
         Info<< "============================================"<< endl;
+        double total_construct_time = time_monitor_rhoEqn_pre + time_monitor_UEqn_pre + time_monitor_YEqn_pre + time_monitor_EEqn_pre + time_monitor_pEqn_pre +\
+            time_monitor_UEqn_post + time_monitor_YEqn_post + time_monitor_EEqn_solve + time_monitor_pEqn_post;
+        double total_convert_time = time_monitor_rhoEqn_convert + time_monitor_YEqn_convert + time_monitor_EEqn_convert + time_monitor_pEqn_convert;
+        double total_solve_time = time_monitor_rhoEqn_solve + time_monitor_YEqn_solve + time_monitor_EEqn_solve + time_monitor_pEqn_solve;
+        double total_eqn_time = time_monitor_rhoEqn + time_monitor_UEqn + time_monitor_YEqn + time_monitor_EEqn + time_monitor_pEqn;
+        Info << "Total eqn time : " << total_eqn_time << " s" << endl; 
+        Info << "Total constuct time : " << total_construct_time << " s " << total_construct_time * 100. / total_eqn_time << " %" << endl;
+        Info << "Total convert time : " << total_convert_time << " s " << total_convert_time * 100. / total_eqn_time << " %" << endl;
+        Info << "Total solve time : " << total_solve_time << " s " << total_solve_time * 100. / total_eqn_time << " %" << endl;
+        Info<< "============================================"<< endl;
 
         // Info<< "ExecutionTime = " << runTime.elapsedCpuTime() << " s"
         //     << "  ClockTime = " << runTime.elapsedClockTime() << " s" << endl;

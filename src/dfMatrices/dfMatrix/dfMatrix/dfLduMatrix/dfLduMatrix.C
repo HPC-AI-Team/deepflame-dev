@@ -43,6 +43,29 @@ void dfLduMatrix::SpMV(scalar* const __restrict__ ApsiPtr, const scalar* const _
     }
 }
 
+void dfLduMatrix::SumA(scalar* const __restrict__ sumAPtr) const {
+    const label* const __restrict__ uPtr = upperAddr().begin();
+    const label* const __restrict__ lPtr = lowerAddr().begin();
+
+    const scalar* const __restrict__ diagPtr = diag().begin();
+    const scalar* const __restrict__ upperPtr = upper().begin();
+    const scalar* const __restrict__ lowerPtr = lower().begin();
+
+    label nCells = diag().size();
+    label nFaces = upper().size();
+
+    for (label cell=0; cell<nCells; cell++)
+    {
+        sumAPtr[cell] = diagPtr[cell];
+    }
+
+    for (label face=0; face<nFaces; face++)
+    {
+        sumAPtr[uPtr[face]] += lowerPtr[face];
+        sumAPtr[lPtr[face]] += upperPtr[face];
+    }
+}
+
 void dfLduMatrix::GaussSeidel(scalar* const __restrict__ psiPtr, scalar* const __restrict__ bPrimePtr) const {
     const label nCells = diag().size();
 

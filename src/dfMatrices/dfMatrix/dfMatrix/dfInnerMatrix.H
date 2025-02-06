@@ -46,6 +46,9 @@ public:
         scalar* const __restrict__ ApsiPtr,
         const scalar* const __restrict__ psiPtr
     ) const = 0;
+    virtual void SumA(
+        scalar* const __restrict__ sumAPtr
+    ) const = 0;
     virtual void GaussSeidel
     (
         scalar* const __restrict__ psiPtr,

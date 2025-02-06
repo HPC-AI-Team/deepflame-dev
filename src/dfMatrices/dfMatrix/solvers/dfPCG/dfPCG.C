@@ -1,5 +1,7 @@
 #include "dfPCG.H"
 #include <mpi.h>
+#include "dfArrayOp.H"
+#include "PstreamReduceOps.H"
 
 namespace Foam
 {
@@ -50,15 +52,7 @@ Foam::solverPerformance Foam::dfPCG::solve
     const direction cmpt
 ) const
 {
-    double spmv_start, spmv_end;
-    double normFactor_start, normFactor_end;
-    double gSumMag_start, gSumMag_end;
-    double gSumProd_start, gSumProd_end;
-    double localUpdate_start, localUpdate_end;
-    double precondition_start, precondition_end;
-    double precondition_construct_start, precondition_construct_end;
-
-    double solve_start = MPI_Wtime();
+    clockTime solveClock;
 
     // --- Setup class containing solver performance data
     solverPerformance solverPerf
@@ -77,36 +71,46 @@ Foam::solverPerformance Foam::dfPCG::solve
     scalarField wA(nCells);
     scalar* __restrict__ wAPtr = wA.begin();
 
+    scalarField rA(nCells);
+    scalar* __restrict__ rAPtr = rA.begin();
+
+    const scalar* __restrict__ const sourcePtr = source.begin();
+
     scalar wArA = solverPerf.great_;
     scalar wArAold = wArA;
 
+    misc_time += solveClock.timeIncrement();
+
     // --- Calculate A.psi
-    spmv_start = MPI_Wtime();
     matrix_.Amul(wA, psi, interfaceBouCoeffs_, interfaces_, cmpt);
-    spmv_end = MPI_Wtime();
-    spmv_time += spmv_end - spmv_start;
+    spmv_time += solveClock.timeIncrement();
 
     // --- Calculate initial residual field
-    localUpdate_start = MPI_Wtime();
-    scalarField rA(source - wA);
-    localUpdate_end = MPI_Wtime();
-    localUpdate_time += localUpdate_end - localUpdate_start;
+    // scalarField rA(source - wA);
+    #pragma omp parallel for
+    for (label cell=0; cell<nCells; cell++)
+    {
+        rAPtr[cell] = sourcePtr[cell] - wAPtr[cell];
+    }
 
-    scalar* __restrict__ rAPtr = rA.begin();
+    localUpdate_time += solveClock.timeIncrement();
 
     // --- Calculate normalisation factor
-    normFactor_start = MPI_Wtime();
     scalar normFactor = this->normFactor(psi, source, wA, pA);
-    normFactor_end = MPI_Wtime();
-    normFactor_time += normFactor_end - normFactor_start;
+    normFactor_time += solveClock.timeIncrement();
 
     // --- Calculate normalised residual norm
-    gSumMag_start = MPI_Wtime();
-    solverPerf.initialResidual() =
-        gSumMag(rA, matrix().mesh().comm())
-       /normFactor;
-    gSumMag_end = MPI_Wtime();
-    gSumMag_time += gSumMag_end - gSumMag_start;
+    // solverPerf.initialResidual() = gSumMag(rA, matrix().mesh().comm()) / normFactor;
+
+    scalar rASumMag = dfSumMag(rA.begin(), rA.size());
+
+    gSumMag_time += solveClock.timeIncrement();
+    
+    reduce(rASumMag, sumOp<scalar>());
+
+    allreduce_time += solveClock.timeIncrement();
+
+    solverPerf.initialResidual() =  rASumMag / normFactor;
 
     solverPerf.finalResidual() = solverPerf.initialResidual();
     // --- Check convergence, solve if not converged
@@ -123,21 +127,22 @@ Foam::solverPerformance Foam::dfPCG::solve
             wArAold = wArA;
 
             // --- Precondition residual
-            precondition_start = MPI_Wtime();
             preconPtr_->precondition(wA, rA, cmpt);
-            precondition_end = MPI_Wtime();
-            precondition_time += precondition_end - precondition_start;
+            precondition_time += solveClock.timeIncrement();
 
             // --- Update search directions:
-            gSumProd_start = MPI_Wtime();
-            wArA = gSumProd(wA, rA, matrix().mesh().comm());
-            gSumProd_end = MPI_Wtime();
-            gSumProd_time += gSumProd_end - gSumProd_start;
+            // wArA = gSumProd(wA, rA, matrix().mesh().comm());
+            wArA = dfSumProd(wA.begin(), rA.begin(), wA.size());
 
+            gSumProd_time += solveClock.timeIncrement();
 
-            localUpdate_start = MPI_Wtime();
+            reduce(wArA, sumOp<scalar>());
+
+            allreduce_time += solveClock.timeIncrement();
+
             if (solverPerf.nIterations() == 0)
             {
+                #pragma omp parallel for
                 for (label cell=0; cell<nCells; cell++)
                 {
                     pAPtr[cell] = wAPtr[cell];
@@ -147,45 +152,44 @@ Foam::solverPerformance Foam::dfPCG::solve
             {
                 scalar beta = wArA/wArAold;
 
+                #pragma omp parallel for
                 for (label cell=0; cell<nCells; cell++)
                 {
                     pAPtr[cell] = wAPtr[cell] + beta*pAPtr[cell];
                 }
             }
-            localUpdate_end = MPI_Wtime();
-            localUpdate_time += localUpdate_end - localUpdate_start;
+            localUpdate_time += solveClock.timeIncrement();
 
             // --- Update preconditioned residual
-            spmv_start = MPI_Wtime();   
             matrix_.Amul(wA, pA, interfaceBouCoeffs_, interfaces_, cmpt);
-            spmv_end = MPI_Wtime();
-            spmv_time += spmv_end - spmv_start;
+            spmv_time += solveClock.timeIncrement();
 
-            gSumProd_start = MPI_Wtime();
             scalar wApA = gSumProd(wA, pA, matrix().mesh().comm());
-            gSumProd_end = MPI_Wtime();
-            gSumProd_time += gSumProd_end - gSumProd_start;
+            gSumProd_time += solveClock.timeIncrement();
 
             // --- Test for singularity
             if (solverPerf.checkSingularity(mag(wApA)/normFactor)) break;
             // --- Update solution and residual:
 
-            localUpdate_start = MPI_Wtime();
             scalar alpha = wArA/wApA;
+            #pragma omp parallel for
             for (label cell=0; cell<nCells; cell++)
             {
                 psiPtr[cell] += alpha*pAPtr[cell];
                 rAPtr[cell] -= alpha*wAPtr[cell];
             }
-            localUpdate_end = MPI_Wtime();
-            localUpdate_time += localUpdate_end - localUpdate_start;
+            localUpdate_time += solveClock.timeIncrement();
 
-            gSumMag_start = MPI_Wtime();
-            solverPerf.finalResidual() =
-                gSumMag(rA, matrix().mesh().comm())
-               /normFactor;
-            gSumMag_end = MPI_Wtime();
-            gSumMag_time += gSumMag_end - gSumMag_start;
+            // solverPerf.finalResidual() = gSumMag(rA, matrix().mesh().comm()) / normFactor;
+            rASumMag = dfSumMag(rA.begin(), rA.size());
+
+            gSumMag_time += solveClock.timeIncrement();
+
+            reduce(rASumMag, sumOp<scalar>());
+
+            allreduce_time += solveClock.timeIncrement();
+
+            solverPerf.finalResidual() = rASumMag / normFactor;
 
         } while
         (
@@ -198,9 +202,10 @@ Foam::solverPerformance Foam::dfPCG::solve
 
     }
 
-    double solve_end = MPI_Wtime();
-    solve_time += solve_end - solve_start;
+    misc_time += solveClock.timeIncrement();
+    solve_time = solveClock.elapsedTime();
 
+    print_time();
     return solverPerf;
 }
 

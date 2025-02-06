@@ -30,6 +30,8 @@ public:
 
     void SpMV(scalar* const __restrict__ ApsiPtr, const scalar* const __restrict__ psiPtr) const;
     
+    void SumA(scalar* const __restrict__ sumPtr) const;
+
     void GaussSeidel(scalar* const __restrict__ psiPtr, scalar* const __restrict__ bPrimePtr) const;
     void Jacobi(scalar* const __restrict__ psiPtr, scalar* const __restrict__ bPrimePtr) const;
 

@@ -16,6 +16,19 @@ void dfCSRSubMatrix::SpMV(scalar* const __restrict__ ApsiPtr_offset, const scala
     }
 }
 
+void dfCSRSubMatrix::SumA(scalar* const __restrict__ sumAPtr_offset) const {
+    const label* const __restrict__ rowPtr = rowPtr_.get();
+    const scalar* const __restrict__ valuePtr = values_.get();
+
+    for(label r = 0; r < nRows_; ++r){
+        scalar sum = 0.;
+        for(label idx = rowPtr[r]; idx < rowPtr[r+1]; ++idx){
+            sum += valuePtr[idx];
+        }
+        sumAPtr_offset[r] += sum;
+    }
+}
+
 
 void dfCSRSubMatrix::BsubApsi(scalar* const __restrict__ BPtr_offset, const scalar* const __restrict__ psiPtr_offset) const {
     // Info << "Enter dfCSRSubMatrix::BsubApsi(scalar* const __restrict__ BPtr_offset, const scalar* const __restrict__ psiPtr_offset)" << endl << flush; 

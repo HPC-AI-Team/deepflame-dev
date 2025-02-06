@@ -128,6 +128,10 @@ public:
         const scalarField& psi
     ) const { innerMatrixPtr_->SpMV(Apsi.begin(), psi.begin()); };
 
+    void SumA(scalarField& sumA) const {
+        innerMatrixPtr_->SumA(sumA.begin());
+    };
+
     void GaussSeidel
     (
         scalarField& psi,

@@ -90,6 +90,7 @@ void dfCSRMatrix::SpMV(scalar* const __restrict__ ApsiPtr, const scalar* const _
     // Pout << "Enter dfCSRMatrix::SpMV(scalar* const __restrict__ ApsiPtr, const scalar* const __restrict__ psiPtr)" << endl << flush;
     const scalar* const __restrict__ diagPtr = diag().begin(); 
     
+    #pragma omp parallel for
     for(label r = 0; r < n_; ++r){
         scalar sum = diagPtr[r] * psiPtr[r];
         for(label j = rowPtr_[r]; j < rowPtr_[r + 1]; ++j){
@@ -98,6 +99,18 @@ void dfCSRMatrix::SpMV(scalar* const __restrict__ ApsiPtr, const scalar* const _
         ApsiPtr[r] = sum;
     }
     // Pout << "Exit dfCSRMatrix::SpMV(scalar* const __restrict__ ApsiPtr, const scalar* const __restrict__ psiPtr)" << endl << flush;
+}
+
+void dfCSRMatrix::SumA(scalar* const __restrict__ sumAPtr) const {
+    const scalar* const __restrict__ diagPtr = diag().begin(); 
+    #pragma omp parallel for
+    for(label r = 0; r < n_; ++r){
+        scalar sum = diagPtr[r];
+        for(label j = rowPtr_[r]; j < rowPtr_[r + 1]; ++j){
+            sum += values_[j];
+        }
+        sumAPtr[r] = sum;
+    }
 }
 
 // block Jacobi
@@ -121,6 +134,7 @@ void dfCSRMatrix::Jacobi(scalar* const __restrict__ psiPtr, scalar* const __rest
 
     scalar* psiOldPtr = new scalar[n_];
     std::copy(psiPtr, psiPtr + n_, psiOldPtr);
+    #pragma omp parallel for
     for(label r = 0; r < n_; ++r){
         scalar sum = bPrimePtr[r];
         for(label j = rowPtr_[r]; j < rowPtr_[r + 1]; ++j){

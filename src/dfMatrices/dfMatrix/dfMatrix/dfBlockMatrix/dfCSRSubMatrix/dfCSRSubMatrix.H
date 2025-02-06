@@ -22,6 +22,10 @@ public:
         const scalar* const __restrict__ psiPtr_offset
     ) const;
 
+    void SumA(
+        scalar* const __restrict__ sumAPtr_offset
+    ) const;
+
     void BsubApsi(
         scalar* const __restrict__ BPtr_offset,
         const scalar* const __restrict__ psiPtr_offset

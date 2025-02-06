@@ -166,46 +166,26 @@ void Foam::dfMatrix::sumA
     const lduInterfaceFieldPtrsList& interfaces
 ) const
 {
-    lduMatrix_.sumA(sumA, interfaceBouCoeffs, interfaces);
-    // scalar* __restrict__ sumAPtr = sumA.begin();
+    scalar* __restrict__ sumAPtr = sumA.begin();
+    // lduMatrix_.sumA(sumA, interfaceBouCoeffs, interfaces);
 
-    // const scalar* __restrict__ diagPtr = diag().begin();
+    SumA(sumA);
 
-    // const label* __restrict__ uPtr = lduAddr().upperAddr().begin();
-    // const label* __restrict__ lPtr = lduAddr().lowerAddr().begin();
+    // Add the interface internal coefficients to diagonal
+    // and the interface boundary coefficients to the sum-off-diagonal
+    forAll(interfaces, patchi)
+    {
+        if (interfaces.set(patchi))
+        {
+            const labelUList& pa = lduAddr().patchAddr(patchi);
+            const scalarField& pCoeffs = interfaceBouCoeffs[patchi];
 
-    // const scalar* __restrict__ lowerPtr = lower().begin();
-    // const scalar* __restrict__ upperPtr = upper().begin();
-
-    // const label nCells = diag().size();
-    // const label nFaces = upper().size();
-
-    // for (label cell=0; cell<nCells; cell++)
-    // {
-    //     sumAPtr[cell] = diagPtr[cell];
-    // }
-
-    // for (label face=0; face<nFaces; face++)
-    // {
-    //     sumAPtr[uPtr[face]] += lowerPtr[face];
-    //     sumAPtr[lPtr[face]] += upperPtr[face];
-    // }
-
-    // // Add the interface internal coefficients to diagonal
-    // // and the interface boundary coefficients to the sum-off-diagonal
-    // forAll(interfaces, patchi)
-    // {
-    //     if (interfaces.set(patchi))
-    //     {
-    //         const labelUList& pa = lduAddr().patchAddr(patchi);
-    //         const scalarField& pCoeffs = interfaceBouCoeffs[patchi];
-
-    //         forAll(pa, face)
-    //         {
-    //             sumAPtr[pa[face]] -= pCoeffs[face];
-    //         }
-    //     }
-    // }
+            forAll(pa, face)
+            {
+                sumAPtr[pa[face]] -= pCoeffs[face];
+            }
+        }
+    }
 }
 
 void Foam::dfMatrix::residual
@@ -218,78 +198,78 @@ void Foam::dfMatrix::residual
     const direction cmpt
 ) const
 {
-    lduMatrix_.residual(rA, psi, source, interfaceBouCoeffs, interfaces, cmpt);
-    // // Parallel boundary initialisation.
-    // // Note: there is a change of sign in the coupled
-    // // interface update.  The reason for this is that the
-    // // internal coefficients are all located at the l.h.s. of
-    // // the matrix whereas the "implicit" coefficients on the
-    // // coupled boundaries are all created as if the
-    // // coefficient contribution is of a source-kind (i.e. they
-    // // have a sign as if they are on the r.h.s. of the matrix.
-    // // To compensate for this, it is necessary to turn the
-    // // sign of the contribution.
+    // lduMatrix_.residual(rA, psi, source, interfaceBouCoeffs, interfaces, cmpt);
+    // Parallel boundary initialisation.
+    // Note: there is a change of sign in the coupled
+    // interface update.  The reason for this is that the
+    // internal coefficients are all located at the l.h.s. of
+    // the matrix whereas the "implicit" coefficients on the
+    // coupled boundaries are all created as if the
+    // coefficient contribution is of a source-kind (i.e. they
+    // have a sign as if they are on the r.h.s. of the matrix.
+    // To compensate for this, it is necessary to turn the
+    // sign of the contribution.
 
-    // FieldField<Field, scalar> mBouCoeffs(interfaceBouCoeffs.size());
+    FieldField<Field, scalar> mBouCoeffs(interfaceBouCoeffs.size());
 
-    // forAll(mBouCoeffs, patchi)
+    forAll(mBouCoeffs, patchi)
+    {
+        if (interfaces.set(patchi))
+        {
+            mBouCoeffs.set(patchi, -interfaceBouCoeffs[patchi]);
+        }
+    }
+
+    // Initialise the update of interfaced interfaces
+    initMatrixInterfaces
+    (
+        mBouCoeffs,
+        interfaces,
+        psi,
+        rA,
+        cmpt
+    );
+
+    // scalar* __restrict__ rAPtr = rA.begin();
+
+    // const scalar* const __restrict__ psiPtr = psi.begin();
+    // const scalar* const __restrict__ diagPtr = diag().begin();
+    // const scalar* const __restrict__ sourcePtr = source.begin();
+
+    // const label* const __restrict__ uPtr = lduAddr().upperAddr().begin();
+    // const label* const __restrict__ lPtr = lduAddr().lowerAddr().begin();
+
+    // const scalar* const __restrict__ upperPtr = upper().begin();
+    // const scalar* const __restrict__ lowerPtr = lower().begin();
+
+    // const label nCells = diag().size();
+    // for (label cell=0; cell<nCells; cell++)
     // {
-    //     if (interfaces.set(patchi))
-    //     {
-    //         mBouCoeffs.set(patchi, -interfaceBouCoeffs[patchi]);
-    //     }
+    //     rAPtr[cell] = sourcePtr[cell] - diagPtr[cell]*psiPtr[cell];
     // }
 
-    // // Initialise the update of interfaced interfaces
-    // initMatrixInterfaces
-    // (
-    //     mBouCoeffs,
-    //     interfaces,
-    //     psi,
-    //     rA,
-    //     cmpt
-    // );
 
-    // // scalar* __restrict__ rAPtr = rA.begin();
+    // const label nFaces = upper().size();
 
-    // // const scalar* const __restrict__ psiPtr = psi.begin();
-    // // const scalar* const __restrict__ diagPtr = diag().begin();
-    // // const scalar* const __restrict__ sourcePtr = source.begin();
+    // for (label face=0; face<nFaces; face++)
+    // {
+    //     rAPtr[uPtr[face]] -= lowerPtr[face]*psiPtr[lPtr[face]];
+    //     rAPtr[lPtr[face]] -= upperPtr[face]*psiPtr[uPtr[face]];
+    // }
 
-    // // const label* const __restrict__ uPtr = lduAddr().upperAddr().begin();
-    // // const label* const __restrict__ lPtr = lduAddr().lowerAddr().begin();
+    scalarField Apsi(psi.size());
+    SpMV(Apsi, psi);
+    rA = source - Apsi;
 
-    // // const scalar* const __restrict__ upperPtr = upper().begin();
-    // // const scalar* const __restrict__ lowerPtr = lower().begin();
-
-    // // const label nCells = diag().size();
-    // // for (label cell=0; cell<nCells; cell++)
-    // // {
-    // //     rAPtr[cell] = sourcePtr[cell] - diagPtr[cell]*psiPtr[cell];
-    // // }
-
-
-    // // const label nFaces = upper().size();
-
-    // // for (label face=0; face<nFaces; face++)
-    // // {
-    // //     rAPtr[uPtr[face]] -= lowerPtr[face]*psiPtr[lPtr[face]];
-    // //     rAPtr[lPtr[face]] -= upperPtr[face]*psiPtr[uPtr[face]];
-    // // }
-
-    // scalarField Apsi(psi.size());
-    // SpMV(Apsi, psi);
-    // rA = source - Apsi;
-
-    // // Update interface interfaces
-    // updateMatrixInterfaces
-    // (
-    //     mBouCoeffs,
-    //     interfaces,
-    //     psi,
-    //     rA,
-    //     cmpt
-    // );
+    // Update interface interfaces
+    updateMatrixInterfaces
+    (
+        mBouCoeffs,
+        interfaces,
+        psi,
+        rA,
+        cmpt
+    );
 }
 
 
@@ -302,10 +282,10 @@ Foam::tmp<Foam::scalarField> Foam::dfMatrix::residual
     const direction cmpt
 ) const
 {
-    return lduMatrix_.residual(psi, source, interfaceBouCoeffs, interfaces, cmpt);
-    // tmp<scalarField> trA(new scalarField(psi.size()));
-    // residual(trA.ref(), psi, source, interfaceBouCoeffs, interfaces, cmpt);
-    // return trA;
+    // return lduMatrix_.residual(psi, source, interfaceBouCoeffs, interfaces, cmpt);
+    tmp<scalarField> trA(new scalarField(psi.size()));
+    residual(trA.ref(), psi, source, interfaceBouCoeffs, interfaces, cmpt);
+    return trA;
 }
 
 
