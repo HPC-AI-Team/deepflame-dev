@@ -12,10 +12,15 @@ private:
     std::unique_ptr<label> rowPtr_;
     std::unique_ptr<label> colIdx_;
     std::unique_ptr<scalar> values_;
+    std::unique_ptr<label> value_ldu_idx_;
 
 public:
-    dfCSRSubMatrix(label nRows, label nCols, label* rowPtr, label* colIdx, scalar* values):dfBlockSubMatrix(nRows, nCols),rowPtr_(rowPtr),colIdx_(colIdx),values_(values){}
+    dfCSRSubMatrix(label nRows, label nCols, label* rowPtr, label* colIdx, scalar* values):dfBlockSubMatrix(nRows, nCols),rowPtr_(rowPtr),colIdx_(colIdx),values_(values),value_ldu_idx_(nullptr){}
+    dfCSRSubMatrix(label nRows, label nCols, label* rowPtr, label* colIdx, scalar* values, label* value_ldu_idx):dfBlockSubMatrix(nRows, nCols),rowPtr_(rowPtr),colIdx_(colIdx),values_(values),value_ldu_idx_(value_ldu_idx){}
     ~dfCSRSubMatrix(){}
+
+    void valueCopyOffDiagBlock(const scalar* const __restrict__ lduValuePtr);
+    void valueCopyDiagBlock(const scalar* const __restrict__ lower, const scalar* const __restrict__ upper);
 
     void SpMV(
         scalar* const __restrict__ ApsiPtr_offset,

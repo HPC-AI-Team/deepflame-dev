@@ -43,7 +43,7 @@ void Foam::dfMatrix::Amul
     const direction cmpt
 ) const
 {
-    // lduMatrix_.Amul(Apsi, psi, interfaceBouCoeffs, interfaces, cmpt);
+    // lduMatrixPtr_->Amul(Apsi, psi, interfaceBouCoeffs, interfaces, cmpt);
     double Amul_start, Amul_end;
     double Amul_Communication_init_start, Amul_Communication_init_end;
     double Amul_Communication_update_start, Amul_Communication_update_end;
@@ -94,7 +94,7 @@ void Foam::dfMatrix::Amul
     const direction cmpt
 ) const
 {
-    // lduMatrix_.Amul(Apsi, tpsi(), interfaceBouCoeffs, interfaces, cmpt);
+    // lduMatrixPtr_->Amul(Apsi, tpsi(), interfaceBouCoeffs, interfaces, cmpt);
     Amul(Apsi, tpsi(), interfaceBouCoeffs, interfaces, cmpt);
     tpsi.clear();
 }
@@ -167,7 +167,7 @@ void Foam::dfMatrix::sumA
 ) const
 {
     scalar* __restrict__ sumAPtr = sumA.begin();
-    // lduMatrix_.sumA(sumA, interfaceBouCoeffs, interfaces);
+    // lduMatrixPtr_->sumA(sumA, interfaceBouCoeffs, interfaces);
 
     SumA(sumA);
 
@@ -198,7 +198,7 @@ void Foam::dfMatrix::residual
     const direction cmpt
 ) const
 {
-    // lduMatrix_.residual(rA, psi, source, interfaceBouCoeffs, interfaces, cmpt);
+    // lduMatrixPtr_->residual(rA, psi, source, interfaceBouCoeffs, interfaces, cmpt);
     // Parallel boundary initialisation.
     // Note: there is a change of sign in the coupled
     // interface update.  The reason for this is that the
@@ -282,7 +282,7 @@ Foam::tmp<Foam::scalarField> Foam::dfMatrix::residual
     const direction cmpt
 ) const
 {
-    // return lduMatrix_.residual(psi, source, interfaceBouCoeffs, interfaces, cmpt);
+    // return lduMatrixPtr_->residual(psi, source, interfaceBouCoeffs, interfaces, cmpt);
     tmp<scalarField> trA(new scalarField(psi.size()));
     residual(trA.ref(), psi, source, interfaceBouCoeffs, interfaces, cmpt);
     return trA;

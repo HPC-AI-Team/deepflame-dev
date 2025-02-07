@@ -44,6 +44,7 @@ SourceFiles
 #include "runTimeSelectionTables.H"
 
 #include "boolList.H"
+#include "dfMatrix.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -114,6 +115,8 @@ protected:
         //- Hierarchy of mesh addressing
         PtrList<lduPrimitiveMesh> meshLevels_;
 
+        // dfMatrix dfMatrixPattern_;
+        PtrList<dfMatrix> dfMatrixLevelPatterns_;
 
         // Processor agglomeration
 
@@ -323,6 +326,8 @@ public:
 
             //- Return df mesh of given level
             const lduMesh& meshLevel(const label leveli) const;
+
+            const dfMatrix& dfMatrixLevel(const label leveli) const;
 
             //- Do we have mesh for given level?
             bool hasMeshLevel(const label leveli) const;

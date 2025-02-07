@@ -347,6 +347,11 @@ void Foam::dfGAMGAgglomeration::agglomerateLduAddressing
         )
     );
 
+    dfMatrixLevelPatterns_.set
+    (
+        fineLevelIndex,
+        new dfMatrix(meshLevels_[fineLevelIndex])
+    );
 
     if (debug & 2)
     {

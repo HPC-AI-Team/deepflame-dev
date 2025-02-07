@@ -192,22 +192,29 @@ void Foam::dfGAMGSolver::agglomerateMatrix
             }
         }
 
-        if(fineDFMatrix.getFormat() == InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_BLOCK_CSR){
-            const dfBlockMatrix& fineBlockMatrix = dynamic_cast<const dfBlockMatrix&>(fineDFMatrix.innerMatrix());
-            const labelList& fineRowBlockPtr = fineBlockMatrix.rowBlockPtr();
-            const labelList& fineToCoarse = agglomeration_.restrictAddressing(fineLevelIndex);
-            dfMatrixLevels_.set
-            (
-                fineLevelIndex,
-                new dfMatrix(coarseMatrix, fineRowBlockPtr, fineToCoarse)
-            );
-        }else{
-            dfMatrixLevels_.set
-            (
-                fineLevelIndex,
-                new dfMatrix(coarseMatrix)
-            );
-        }
+        // if(fineDFMatrix.getFormat() == InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_BLOCK_CSR){
+        //     const dfBlockMatrix& fineBlockMatrix = dynamic_cast<const dfBlockMatrix&>(fineDFMatrix.innerMatrix());
+        //     const labelList& fineRowBlockPtr = fineBlockMatrix.rowBlockPtr();
+        //     const labelList& fineToCoarse = agglomeration_.restrictAddressing(fineLevelIndex);
+        //     dfMatrixLevels_.set
+        //     (
+        //         fineLevelIndex,
+        //         new dfMatrix(coarseMatrix, fineRowBlockPtr, fineToCoarse);
+        //     );
+        // }else{
+        //     dfMatrixLevels_.set
+        //     (
+        //         fineLevelIndex,
+        //         new dfMatrix(coarseMatrix)
+        //     );
+        // }
+
+        dfMatrixLevels_.set
+        (
+            fineLevelIndex,
+            new dfMatrix(agglomeration_.dfMatrixLevel(fineLevelIndex + 1))
+        );
+        dfMatrixLevels_[fineLevelIndex].valueCopy(coarseMatrix);
     }
 }
 

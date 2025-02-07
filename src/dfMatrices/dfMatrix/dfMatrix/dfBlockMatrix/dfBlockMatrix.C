@@ -95,49 +95,207 @@ void dfBlockMatrix::buildBlocks(const lduMatrix& ldu){
     // Info << "Exit dfBlockMatrix::buildBlocks" << endl;
 }
 
-dfBlockMatrix::dfBlockMatrix(const lduMatrix& ldu, const labelList& rowBlockPtr):dfInnerMatrix(ldu),rowBlockCount_(rowBlockPtr.size()-1),rowBlockPtr_(rowBlockPtr){
-    // Pout << "Enter dfBlockMatrix::dfBlockMatrix(lduMatrix& ldu, const labelList& rowBlockPtr)" << endl << flush;
-    Info << "Building dfBlockMatrix n_ : " << n_ << " rowBlockCount_ : " << rowBlockCount_ << endl;
-    blocks_.resize(rowBlockCount_ * rowBlockCount_);
-    // off_diagonal_nnz_ = 0;
-    if(!ldu.hasLower() && !ldu.hasUpper()){
-        return;
+void dfBlockMatrix::buildBlocks(const lduMesh& mesh){
+    std::vector<std::vector<std::tuple<label,label,label>>> blocksTmp(rowBlockCount_ * rowBlockCount_);
+    const labelList& lduLowerAddr = mesh.lduAddr().lowerAddr();
+    const labelList& lduUpperAddr = mesh.lduAddr().upperAddr();
+    // lower[i] (lduUpperAddr[i], lduLowerAddr[i]) 
+    // const scalarList& lduLower = ldu.lower();
+    // upper[i] (lduLowerAddr[i], lduUpperAddr[i])
+    // const scalarList& lduUpper = ldu.upper();
+
+    label nFaces = lduUpperAddr.size();
+
+    // lower
+    // (lduUpperAddr[i], lduLowerAddr[i])
+    for(label i = 0; i < nFaces; ++i){
+        label r = lduUpperAddr[i];
+        label c = lduLowerAddr[i];
+        // scalar v = lduLower[i];
+        label rbid = std::upper_bound(rowBlockPtr_.begin(), rowBlockPtr_.end(), r) - rowBlockPtr_.begin() - 1;
+        label cbid = std::upper_bound(rowBlockPtr_.begin(), rowBlockPtr_.end(), c) - rowBlockPtr_.begin() - 1;
+        assert(r > c);
+        blocksTmp[bid2d(rbid, cbid)].push_back({r,c,i});
     }
-    buildBlocks(ldu);
-    // Pout << "Exit dfBlockMatrix::dfBlockMatrix(lduMatrix& ldu, const labelList& rowBlockPtr)" << endl << flush;
+
+    // upper
+    // (lduLowerAddr[i], lduUpperAddr[i])
+    for(label i = 0; i < nFaces; ++i){
+        label r = lduLowerAddr[i];
+        label c = lduUpperAddr[i];
+        // scalar v = lduUpper[i];
+        label rbid = std::upper_bound(rowBlockPtr_.begin(), rowBlockPtr_.end(), r) - rowBlockPtr_.begin() - 1;
+        label cbid = std::upper_bound(rowBlockPtr_.begin(), rowBlockPtr_.end(), c) - rowBlockPtr_.begin() - 1;
+        assert(r < c);
+        blocksTmp[bid2d(rbid, cbid)].push_back({r,c,i});
+    }
+
+    // convert each block to CSR
+    for(label rbid = 0; rbid < rowBlockCount_; ++rbid){
+        for(label cbid = 0; cbid < rowBlockCount_; ++cbid){
+            label bid = bid2d(rbid, cbid);
+            const auto& block = blocksTmp[bid];
+            if(block.size() == 0){
+                continue;
+            }
+            
+            label rowStart = rowBlockPtr_[rbid];
+            label rowEnd = rowBlockPtr_[rbid + 1];
+            label rowLen = rowEnd - rowStart;
+            label colStart = rowBlockPtr_[cbid];
+            label colEnd = rowBlockPtr_[cbid + 1];
+            label colLen = colEnd - colStart;
+
+            // count nnz per row
+            std::vector<label> nnzPerRow(rowLen, 0);
+            
+            for(const auto& entry: block){
+                label r = std::get<0>(entry);
+                nnzPerRow[r - rowStart] += 1;
+            }
+
+            std::unique_ptr<label[]> rowPtr = std::make_unique<label[]>(rowLen + 1);
+            std::vector<label> curIndexPerRow(rowLen + 1);
+
+            rowPtr[0] = 0;
+            curIndexPerRow[0] = 0;
+            for(label i = 0; i < rowLen; ++i){
+                rowPtr[i + 1] = rowPtr[i] + nnzPerRow[i];
+                curIndexPerRow[i + 1] = rowPtr[i + 1];
+            }
+
+            label nnz_block = rowPtr[rowLen];
+
+            std::unique_ptr<label[]> colIdx = std::make_unique<label[]>(nnz_block);
+            std::unique_ptr<scalar[]> values = std::make_unique<scalar[]>(nnz_block);
+            std::unique_ptr<label[]> value_ldu_idx_ = std::make_unique<label[]>(nnz_block);
+
+            for(label i = 0; i < nnz_block; ++i){
+                value_ldu_idx_[i] = -1;
+            }
+
+            for(const auto& entry: block){
+                label r = std::get<0>(entry);
+                label c = std::get<1>(entry);
+                // scalar v = std::get<2>(entry);
+                label faceIndex = std::get<2>(entry);
+                label rowIdx = r - rowStart;
+                label idx = curIndexPerRow[rowIdx];
+                colIdx[idx] = c - colStart;
+                // values[idx] = v;
+                value_ldu_idx_[idx] = faceIndex;
+                curIndexPerRow[rowIdx] += 1;
+            }
+
+            for(label i = 0; i < nnz_block; ++i){
+                assert(value_ldu_idx_[i] != -1);
+            }
+
+            blocks_[bid] = std::make_unique<dfCSRSubMatrix>(rowLen, colLen, rowPtr.release(), colIdx.release(), values.release(), value_ldu_idx_.release());
+        }
+    }
 }
 
-dfBlockMatrix::dfBlockMatrix(const lduMatrix& courseLduMatrix, const labelList& fineRowBlockPtr, const labelList& fineToCoarse):dfInnerMatrix(courseLduMatrix){
-    // build rowBlockPtr_ with fineRowBlockPtr and fineToCoarse
-    // this constructor used in Multi-Grid Algorithm
-    // Info << "Enter dfBlockMatrix::dfBlockMatrix(lduMatrix& courseLduMatrix, const labelList& fineRowBlockPtr, const labelList& fineToCoarse)" << endl << flush;
-    rowBlockCount_ = fineRowBlockPtr.size() - 1;
+dfBlockMatrix::dfBlockMatrix(const lduMatrix& ldu):dfInnerMatrix(ldu){
+    rowBlockCount_ = env::REGION_DECOMPOSE_NBLOCKS;
     rowBlockPtr_.resize(rowBlockCount_ + 1);
-    // rowBlockPtr_[0] = 0;
-    // for(label bid = 0; bid < fineRowBlockPtr.size() - 1; bid++){
-    //     label max_coarseR = -1;
-    //     for(label fineR = fineRowBlockPtr[bid]; fineR < fineRowBlockPtr[bid + 1]; fineR++){
-    //         label coarseR = fineToCoarse[fineR];
-    //         max_coarseR = std::max(max_coarseR, coarseR);
-    //     }
-    //     rowBlockPtr_[bid + 1] = max_coarseR + 1;
-    // }
-
-    for(label bid = 0; bid < fineRowBlockPtr.size() - 1; bid++){
+    for(label bid = 0; bid < rowBlockCount_; bid++){
         rowBlockPtr_[bid] = n_ * bid / rowBlockCount_;
     }
     rowBlockPtr_[rowBlockCount_] = n_;
-
     blocks_.resize(rowBlockCount_ * rowBlockCount_);
-    // off_diagonal_nnz_ = 0;
-    if(!courseLduMatrix.hasLower() && !courseLduMatrix.hasUpper()){
-        return;
-    }
-
-    buildBlocks(courseLduMatrix);
-    // Info << "Exit dfBlockMatrix::dfBlockMatrix(lduMatrix& courseLduMatrix, const labelList& fineRowBlockPtr, const labelList& fineToCoarse)" << endl << flush;
+    buildBlocks(ldu);
 }
 
+dfBlockMatrix::dfBlockMatrix(const lduMesh& mesh):dfInnerMatrix(mesh){
+    rowBlockCount_ = env::REGION_DECOMPOSE_NBLOCKS;
+    rowBlockPtr_.resize(rowBlockCount_ + 1);
+    for(label bid = 0; bid < rowBlockCount_; bid++){
+        rowBlockPtr_[bid] = n_ * bid / rowBlockCount_;
+    }
+    rowBlockPtr_[rowBlockCount_] = n_;
+    blocks_.resize(rowBlockCount_ * rowBlockCount_);
+    buildBlocks(mesh);
+}
+
+dfBlockMatrix::dfBlockMatrix(const lduMatrix& ldu, const labelList& rowBlockPtr):dfInnerMatrix(ldu),rowBlockCount_(rowBlockPtr.size()-1),rowBlockPtr_(rowBlockPtr){
+    Info << "Building dfBlockMatrix n_ : " << n_ << " rowBlockCount_ : " << rowBlockCount_ << endl;
+    blocks_.resize(rowBlockCount_ * rowBlockCount_);
+    buildBlocks(ldu);
+}
+
+dfBlockMatrix::dfBlockMatrix(const lduMesh& mesh, const labelList& rowBlockPtr):dfInnerMatrix(mesh),rowBlockCount_(rowBlockPtr.size()-1),rowBlockPtr_(rowBlockPtr){
+    Info << "Building dfBlockMatrix with mesh n_ : " << n_ << " rowBlockCount_ : " << rowBlockCount_ << endl;
+    blocks_.resize(rowBlockCount_ * rowBlockCount_);
+    buildBlocks(mesh);
+}
+
+// dfBlockMatrix::dfBlockMatrix(const lduMatrix& courseLduMatrix, const labelList& fineRowBlockPtr, const labelList& fineToCoarse):dfInnerMatrix(courseLduMatrix){
+//     // this constructor used in Multi-Grid Algorithm
+//     rowBlockCount_ = fineRowBlockPtr.size() - 1;
+//     rowBlockPtr_.resize(rowBlockCount_ + 1);
+//     // rowBlockPtr_[0] = 0;
+//     // for(label bid = 0; bid < fineRowBlockPtr.size() - 1; bid++){
+//     //     label max_coarseR = -1;
+//     //     for(label fineR = fineRowBlockPtr[bid]; fineR < fineRowBlockPtr[bid + 1]; fineR++){
+//     //         label coarseR = fineToCoarse[fineR];
+//     //         max_coarseR = std::max(max_coarseR, coarseR);
+//     //     }
+//     //     rowBlockPtr_[bid + 1] = max_coarseR + 1;
+//     // }
+
+//     for(label bid = 0; bid < fineRowBlockPtr.size() - 1; bid++){
+//         rowBlockPtr_[bid] = n_ * bid / rowBlockCount_;
+//     }
+//     rowBlockPtr_[rowBlockCount_] = n_;
+
+//     blocks_.resize(rowBlockCount_ * rowBlockCount_);
+//     // off_diagonal_nnz_ = 0;
+//     if(!courseLduMatrix.hasLower() && !courseLduMatrix.hasUpper()){
+//         return;
+//     }
+
+//     buildBlocks(courseLduMatrix);
+// }
+
+// dfBlockMatrix::dfBlockMatrix(const lduMesh& courseLduMesh, const labelList& fineRowBlockPtr, const labelList& fineToCoarse):dfInnerMatrix(courseLduMesh){
+//     // this constructor used in Multi-Grid Algorithm
+//     rowBlockCount_ = fineRowBlockPtr.size() - 1;
+//     rowBlockPtr_.resize(rowBlockCount_ + 1);
+//     for(label bid = 0; bid < fineRowBlockPtr.size() - 1; bid++){
+//         rowBlockPtr_[bid] = n_ * bid / rowBlockCount_;
+//     }
+//     rowBlockPtr_[rowBlockCount_] = n_;
+//     blocks_.resize(rowBlockCount_ * rowBlockCount_);
+//     buildBlocks(courseLduMesh);
+// }
+
+void dfBlockMatrix::valueCopy(const lduMatrix& ldu){
+    Info << "Enter dfBlockMatrix::valueCopy(const lduMatrix& ldu)" << endl << flush;
+    dfInnerMatrix::valueCopy(ldu);
+    const auto& lower = ldu.lower();
+    const auto& upper = ldu.upper();
+
+    // #pragma omp parallel for
+    for(label rbid = 0; rbid < rowBlockCount_; ++rbid){
+        label rowOffset = rowBlockPtr_[rbid];
+        label rowLen = rowBlockPtr_[rbid + 1] - rowBlockPtr_[rbid];
+        for(label cbid = 0; cbid < rowBlockCount_; ++cbid){
+            label bid = bid2d(rbid, cbid);
+            if(blocks_[bid] == nullptr){
+                continue;
+            }
+            if(rbid > cbid){
+                blocks_[bid]->valueCopyOffDiagBlock(lower.begin());
+            }else if(rbid < cbid){
+                blocks_[bid]->valueCopyOffDiagBlock(upper.begin());
+            }else{
+                blocks_[bid]->valueCopyDiagBlock(lower.begin(), upper.begin());
+            }
+        }
+    }
+    Info << "Exit dfBlockMatrix::valueCopy(const lduMatrix& ldu)" << endl << flush;
+}
 
 void dfBlockMatrix::SpMV(scalar* const __restrict__ ApsiPtr, const scalar* const __restrict__ psiPtr) const {
     // Pout << "Enter dfBlockMatrix::SpMV(scalar* const __restrict__ ApsiPtr, const scalar* const __restrict__ psiPtr)" << endl << flush;

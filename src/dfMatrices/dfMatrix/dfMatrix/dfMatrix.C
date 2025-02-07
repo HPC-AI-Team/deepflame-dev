@@ -46,236 +46,154 @@ namespace Foam
 const Foam::label Foam::dfMatrix::solver::defaultMaxIter_ = 1000;
 
 Foam::InnerMatrixFormat Foam::dfMatrix::getInnerMatrixTypeFromEnv(){
-    const char* tmp = std::getenv("DFMATRIX_INNERMATRIX_TYPE");
-    if(tmp == NULL){
+    if(env::DFMATRIX_INNERMATRIX_TYPE == "LDU"){
         return InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_LDU;
-    }
-    if(std::strcmp(tmp, "LDU") == 0){
-        return InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_LDU;
-    }else if(std::strcmp(tmp, "CSR") == 0){
+    }else if(env::DFMATRIX_INNERMATRIX_TYPE == "CSR"){
         return InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_CSR;
-    }else if(std::strcmp(tmp, "BLOCK_CSR") == 0){
+    }else if(env::DFMATRIX_INNERMATRIX_TYPE == "BLOCK_CSR"){
         return InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_BLOCK_CSR;
     }else{
-        SeriousError << "Invalid DFMATRIX_INNERMATRIX_TYPE: " << tmp << endl << flush;
+        SeriousError << "Invalid DFMATRIX_INNERMATRIX_TYPE: " << env::DFMATRIX_INNERMATRIX_TYPE << endl << flush;
         std::exit(1);
     }
 }
 
-Foam::dfMatrix::dfMatrix(const lduMatrix& ldu):lduMatrix_(ldu)
+Foam::dfMatrix::dfMatrix(const lduMatrix& ldu): lduMatrixPtr_(&ldu)
 {
-    // innerMatrixPtr_ = new dfLduMatrix(ldu);
     InnerMatrixFormat format = getInnerMatrixTypeFromEnv();
     switch(format){
         case InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_LDU:
             Info << "Building LDU matrix" << endl;
-            innerMatrixPtr_ = std::make_unique<dfLduMatrix>(ldu);
+            innerMatrixPtr_ = std::make_shared<dfLduMatrix>(ldu);
             break;
         case InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_CSR:
             Info << "Building CSR matrix" << endl;
-            innerMatrixPtr_ = std::make_unique<dfCSRMatrix>(ldu);
+            innerMatrixPtr_ = std::make_shared<dfCSRMatrix>(ldu);
             break;
         case InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_BLOCK_CSR:
             Info << "Building CSR matrix" << endl;
-            innerMatrixPtr_ = std::make_unique<dfCSRMatrix>(ldu);
+            innerMatrixPtr_ = std::make_shared<dfBlockMatrix>(ldu);
             break;
         default:
-            // error:
-            SeriousError << "Invalid InnerMatrixFormat: " << format << endl << flush;
-            std::exit(1);
+            assert(false);
+            break;
     }
 }
 
-Foam::dfMatrix::dfMatrix(const lduMatrix& ldu, const labelList& regionPtr):lduMatrix_(ldu)
+Foam::dfMatrix::dfMatrix(const lduMatrix& ldu, const labelList& regionPtr): lduMatrixPtr_(&ldu)
 {
-    // innerMatrixPtr_ = new dfLduMatrix(ldu);
     InnerMatrixFormat format = getInnerMatrixTypeFromEnv();
     switch(format){
         case InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_LDU:
             Info << "Building LDU matrix" << endl;
-            innerMatrixPtr_ = std::make_unique<dfLduMatrix>(ldu);
+            innerMatrixPtr_ = std::make_shared<dfLduMatrix>(ldu);
             break;
         case InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_CSR:
             Info << "Building CSR matrix" << endl;
-            innerMatrixPtr_ = std::make_unique<dfCSRMatrix>(ldu);
+            innerMatrixPtr_ = std::make_shared<dfCSRMatrix>(ldu);
             break;
         case InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_BLOCK_CSR:
             Info << "Building Block CSR matrix" << endl;
-            innerMatrixPtr_ = std::make_unique<dfBlockMatrix>(ldu, regionPtr);
+            innerMatrixPtr_ = std::make_shared<dfBlockMatrix>(ldu, regionPtr);
             break;
         default:
-            // error:
-            SeriousError << "Invalid InnerMatrixFormat: " << format << endl << flush;
-            std::exit(1);
+            assert(false);
+            break;
     }
 }
 
-Foam::dfMatrix::dfMatrix(const lduMatrix& courseLduMatrix, const labelList& fineRowBlockPtr, const labelList& fineToCoarse):lduMatrix_(courseLduMatrix)
+// Foam::dfMatrix::dfMatrix(const lduMatrix& courseLduMatrix, const labelList& fineRowBlockPtr, const labelList& fineToCoarse): lduMatrixPtr_(&courseLduMatrix)
+// {
+//     InnerMatrixFormat format = getInnerMatrixTypeFromEnv();
+//     switch(format){
+//         case InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_LDU:
+//             Info << "Building LDU matrix" << endl;
+//             innerMatrixPtr_ = std::make_shared<dfLduMatrix>(courseLduMatrix);
+//             break;
+//         case InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_CSR:
+//             Info << "Building CSR matrix" << endl;
+//             innerMatrixPtr_ = std::make_shared<dfCSRMatrix>(courseLduMatrix);
+//             break;
+//         case InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_BLOCK_CSR:
+//             Info << "Building Block CSR matrix" << endl;
+//             innerMatrixPtr_ = std::make_shared<dfBlockMatrix>(courseLduMatrix, fineRowBlockPtr, fineToCoarse);
+//             break;
+//         default:
+//             // error:
+//             SeriousError << "Invalid InnerMatrixFormat: " << format << endl << flush;
+//             std::exit(1);
+//     }
+// }
+
+Foam::dfMatrix::dfMatrix(const lduMesh& mesh): lduMatrixPtr_(nullptr)
 {
-    // innerMatrixPtr_ = new dfLduMatrix(ldu);
     InnerMatrixFormat format = getInnerMatrixTypeFromEnv();
     switch(format){
         case InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_LDU:
             Info << "Building LDU matrix" << endl;
-            innerMatrixPtr_ = std::make_unique<dfLduMatrix>(courseLduMatrix);
+            innerMatrixPtr_ = std::make_shared<dfLduMatrix>(mesh);
             break;
         case InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_CSR:
             Info << "Building CSR matrix" << endl;
-            innerMatrixPtr_ = std::make_unique<dfCSRMatrix>(courseLduMatrix);
+            innerMatrixPtr_ = std::make_shared<dfCSRMatrix>(mesh);
             break;
         case InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_BLOCK_CSR:
-            Info << "Building Block CSR matrix" << endl;
-            innerMatrixPtr_ = std::make_unique<dfBlockMatrix>(courseLduMatrix, fineRowBlockPtr, fineToCoarse);
+            Info << "Building CSR matrix" << endl;
+            innerMatrixPtr_ = std::make_shared<dfBlockMatrix>(mesh);
             break;
         default:
-            // error:
-            SeriousError << "Invalid InnerMatrixFormat: " << format << endl << flush;
-            std::exit(1);
+            assert(false);
+            break;
     }
 }
 
-// Foam::scalarField& Foam::dfMatrix::lower()
+Foam::dfMatrix::dfMatrix(const lduMesh& mesh, const labelList& regionPtr): lduMatrixPtr_(nullptr)
+{
+    InnerMatrixFormat format = getInnerMatrixTypeFromEnv();
+    switch(format){
+        case InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_LDU:
+            Info << "Building LDU matrix" << endl;
+            innerMatrixPtr_ = std::make_shared<dfLduMatrix>(mesh);
+            break;
+        case InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_CSR:
+            Info << "Building CSR matrix" << endl;
+            innerMatrixPtr_ = std::make_shared<dfCSRMatrix>(mesh);
+            break;
+        case InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_BLOCK_CSR:
+            Info << "Building Block CSR matrix" << endl;
+            innerMatrixPtr_ = std::make_shared<dfBlockMatrix>(mesh, regionPtr);
+            break;
+        default:
+            assert(false);
+            break;
+    }
+}
+
+// Foam::dfMatrix::dfMatrix(const lduMesh& courseLduMesh, const labelList& fineRowBlockPtr, const labelList& fineToCoarse): lduMatrixPtr_(nullptr)
 // {
-//     if (!lowerPtr_)
-//     {
-//         if (upperPtr_)
-//         {
-//             lowerPtr_ = new scalarField(*upperPtr_);
-//         }
-//         else
-//         {
-//             lowerPtr_ = new scalarField(lduAddr().lowerAddr().size(), 0.0);
-//         }
-//     }
-
-//     return *lowerPtr_;
-// }
-
-
-// Foam::scalarField& Foam::dfMatrix::diag()
-// {
-//     if (!diagPtr_)
-//     {
-//         diagPtr_ = new scalarField(lduAddr().size(), 0.0);
-//     }
-
-//     return *diagPtr_;
-// }
-
-
-// Foam::scalarField& Foam::dfMatrix::upper()
-// {
-//     if (!upperPtr_)
-//     {
-//         if (lowerPtr_)
-//         {
-//             upperPtr_ = new scalarField(*lowerPtr_);
-//         }
-//         else
-//         {
-//             upperPtr_ = new scalarField(lduAddr().lowerAddr().size(), 0.0);
-//         }
-//     }
-
-//     return *upperPtr_;
-// }
-
-
-// Foam::scalarField& Foam::dfMatrix::lower(const label nCoeffs)
-// {
-//     if (!lowerPtr_)
-//     {
-//         if (upperPtr_)
-//         {
-//             lowerPtr_ = new scalarField(*upperPtr_);
-//         }
-//         else
-//         {
-//             lowerPtr_ = new scalarField(nCoeffs, 0.0);
-//         }
-//     }
-
-//     return *lowerPtr_;
-// }
-
-
-// Foam::scalarField& Foam::dfMatrix::diag(const label size)
-// {
-//     if (!diagPtr_)
-//     {
-//         diagPtr_ = new scalarField(size, 0.0);
-//     }
-
-//     return *diagPtr_;
-// }
-
-
-// Foam::scalarField& Foam::dfMatrix::upper(const label nCoeffs)
-// {
-//     if (!upperPtr_)
-//     {
-//         if (lowerPtr_)
-//         {
-//             upperPtr_ = new scalarField(*lowerPtr_);
-//         }
-//         else
-//         {
-//             upperPtr_ = new scalarField(nCoeffs, 0.0);
-//         }
-//     }
-
-//     return *upperPtr_;
-// }
-
-
-// const Foam::scalarField& Foam::dfMatrix::lower() const
-// {
-//     if (!lowerPtr_ && !upperPtr_)
-//     {
-//         FatalErrorInFunction
-//             << "lowerPtr_ or upperPtr_ unallocated"
-//             << abort(FatalError);
-//     }
-
-//     if (lowerPtr_)
-//     {
-//         return *lowerPtr_;
-//     }
-//     else
-//     {
-//         return *upperPtr_;
+//     InnerMatrixFormat format = getInnerMatrixTypeFromEnv();
+//     switch(format){
+//         case InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_LDU:
+//             Info << "Building LDU matrix" << endl;
+//             innerMatrixPtr_ = std::make_shared<dfLduMatrix>(courseLduMesh);
+//             break;
+//         case InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_CSR:
+//             Info << "Building CSR matrix" << endl;
+//             innerMatrixPtr_ = std::make_shared<dfCSRMatrix>(courseLduMesh);
+//             break;
+//         case InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_BLOCK_CSR:
+//             Info << "Building Block CSR matrix" << endl;
+//             innerMatrixPtr_ = std::make_shared<dfBlockMatrix>(courseLduMesh, fineRowBlockPtr, fineToCoarse);
+//             break;
+//         default:
+//             // error:
+//             SeriousError << "Invalid InnerMatrixFormat: " << format << endl << flush;
+//             std::exit(1);
 //     }
 // }
 
+void Foam::dfMatrix::valueCopy(lduMatrix& ldu){
+    lduMatrixPtr_ = &ldu;
+    innerMatrixPtr_->valueCopy(ldu);
+}
 
-// const Foam::scalarField& Foam::dfMatrix::diag() const
-// {
-//     if (!diagPtr_)
-//     {
-//         FatalErrorInFunction
-//             << "diagPtr_ unallocated"
-//             << abort(FatalError);
-//     }
-
-//     return *diagPtr_;
-// }
-
-
-// const Foam::scalarField& Foam::dfMatrix::upper() const
-// {
-//     if (!lowerPtr_ && !upperPtr_)
-//     {
-//         FatalErrorInFunction
-//             << "lowerPtr_ or upperPtr_ unallocated"
-//             << abort(FatalError);
-//     }
-
-//     if (upperPtr_)
-//     {
-//         return *upperPtr_;
-//     }
-//     else
-//     {
-//         return *lowerPtr_;
-//     }
-// }

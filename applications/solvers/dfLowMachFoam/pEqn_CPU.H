@@ -53,15 +53,18 @@ while (pimple.correctNonOrthogonal())
     time_monitor_pEqn_pre += pEqnClock.timeIncrement();
     
 #ifdef USE_DF_MATRIX
-    dfMatrix df_pEqn(pEqn, regionPtr);
+    // dfMatrix df_pEqn(pEqn, regionPtr);
     auto& psi = const_cast<volScalarField&>(pEqn.psi());
     auto& source = pEqn.source();
     auto& internalCoeffs = pEqn.internalCoeffs();
     auto& boundaryCoeffs = pEqn.boundaryCoeffs();
 
+    matrix.valueCopy(pEqn);
+
     time_monitor_pEqn_convert += pEqnClock.timeIncrement();
     
-    df_pEqn.solve(psi, source, internalCoeffs, boundaryCoeffs);
+    // df_pEqn.solve(psi, source, internalCoeffs, boundaryCoeffs);
+    matrix.solve(psi, source, internalCoeffs, boundaryCoeffs);
 #else
     pEqn.solve();
 #endif

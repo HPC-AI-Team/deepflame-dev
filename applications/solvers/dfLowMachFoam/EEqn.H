@@ -30,15 +30,17 @@ Info << "Enter EEqn" << endl;
 
 
 #ifdef USE_DF_MATRIX
-    dfMatrix df_EEqn(EEqn, regionPtr);
+    // dfMatrix df_EEqn(EEqn, regionPtr);
     auto& psi = const_cast<volScalarField&>(EEqn.psi());
     auto& source = EEqn.source();
     auto& internalCoeffs = EEqn.internalCoeffs();
     auto& boundaryCoeffs = EEqn.boundaryCoeffs();
 
+    matrix.valueCopy(EEqn);
     time_monitor_EEqn_convert += EEqnClock.timeIncrement();
 
-    df_EEqn.solve(psi, source, internalCoeffs, boundaryCoeffs, "ha");
+    // df_EEqn.solve(psi, source, internalCoeffs, boundaryCoeffs, "ha");
+    matrix.solve(psi, source, internalCoeffs, boundaryCoeffs, "ha");
 #else
     EEqn.solve("ha");
 #endif

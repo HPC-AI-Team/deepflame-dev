@@ -245,6 +245,8 @@ int main(int argc, char *argv[])
     double buildMeshSchedule_time = initClock.timeIncrement();
     Info << "buildMeshSchedule_time = " << buildMeshSchedule_time << " s" << endl;
 
+    dfMatrix matrix(mesh, regionPtr);
+
     // print all init time:
     double total_init_time = initClock.elapsedTime();
 

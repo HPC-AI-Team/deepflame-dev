@@ -20,15 +20,18 @@ time_monitor_UEqn_pre += UEqnClock.timeIncrement();
     time_monitor_UEqn_pre += UEqnClock.timeIncrement();
 
 #ifdef USE_DF_MATRIX
-    dfMatrix df_UEqnSolve(tUEqnSolve.ref(), regionPtr);
+    // dfMatrix df_UEqnSolve(tUEqnSolve.ref(), regionPtr);
     auto& psi = const_cast<volVectorField&>(UEqnSolve.psi());
     auto& source = UEqnSolve.source();
     auto& internalCoeffs = UEqnSolve.internalCoeffs();
     auto& boundaryCoeffs = UEqnSolve.boundaryCoeffs();
 
+    matrix.valueCopy(tUEqnSolve.ref());
+
     time_monitor_UEqn_convert += UEqnClock.timeIncrement();
 
-    df_UEqnSolve.solve(psi, source, internalCoeffs, boundaryCoeffs);
+    // df_UEqnSolve.solve(psi, source, internalCoeffs, boundaryCoeffs);
+    matrix.solve(psi, source, internalCoeffs, boundaryCoeffs);
 #else
     UEqnSolve.solve();
 #endif

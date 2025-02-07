@@ -26,9 +26,9 @@ namespace Foam{
 class dfMatrix{
 private:
     // const fvMesh& mesh_;
-    const lduMatrix& lduMatrix_;
+    const lduMatrix* lduMatrixPtr_;
 
-    std::unique_ptr<dfInnerMatrix> innerMatrixPtr_;
+    std::shared_ptr<dfInnerMatrix> innerMatrixPtr_;
 
     static InnerMatrixFormat getInnerMatrixTypeFromEnv();
 
@@ -42,29 +42,35 @@ public:
 
     dfMatrix(const lduMatrix& lduMatrix, const labelList& regionPtr);
 
-    dfMatrix(const lduMatrix& courseLduMatrix, const labelList& fineRowBlockPtr, const labelList& fineToCoarse);
+    // dfMatrix(const lduMatrix& courseLduMatrix, const labelList& fineRowBlockPtr, const labelList& fineToCoarse);
+
+    dfMatrix(const lduMesh& mesh);
+
+    dfMatrix(const lduMesh& lduMesh, const labelList& regionPtr);
+
+    // dfMatrix(const lduMesh& courseLduMesh, const labelList& fineRowBlockPtr, const labelList& fineToCoarse);
+
+    void valueCopy(lduMatrix& ldu);
 
     // Copy constructor
-    dfMatrix(const dfMatrix& other) = delete;
-
-    // Copy constructor
-    // void init_value_from_lduMatrix(const lduMatrix& lduMatrix);
+    dfMatrix(const dfMatrix& other):lduMatrixPtr_(other.lduMatrixPtr_),innerMatrixPtr_(other.innerMatrixPtr_){
+        Info << "Warning : In df Copy Constructor !!!" << endl;
+    }
 
     //- Destructor
     ~dfMatrix(){};
 
-    const lduMatrix& ldu() const {return lduMatrix_;}
+    const lduMatrix& ldu() const {assert(lduMatrixPtr_ != nullptr); return *lduMatrixPtr_;}
 
     //- Return the df mesh from which the addressing is obtained
-    const lduMesh& mesh() const {return lduMatrix_.mesh();}
+    const lduMesh& mesh() const {assert(lduMatrixPtr_ != nullptr); return lduMatrixPtr_->mesh();}
     //- Return the df addressing
-    const lduAddressing& lduAddr() const {return lduMatrix_.lduAddr();}
+    const lduAddressing& lduAddr() const {assert(lduMatrixPtr_ != nullptr); return lduMatrixPtr_->lduAddr();}
 
     //- Return the patch evaluation schedule
     const lduSchedule& patchSchedule() const {return lduAddr().patchSchedule();}
 
     // Access to coefficients
-
     const dfInnerMatrix& innerMatrix() const {return *innerMatrixPtr_;};
 
     scalarField& diag() {return innerMatrixPtr_->diag();};

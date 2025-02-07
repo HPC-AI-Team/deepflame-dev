@@ -19,16 +19,30 @@ protected:
     bool symmetric_;
 public:
     dfInnerMatrix(const lduMatrix& ldu):
+        n_(ldu.lduAddr().size()),
         diagonal_(ldu.diagonal()),
         symmetric_(ldu.symmetric())
     {
         assert(ldu.hasDiag());
-        if(ldu.hasDiag())
-        {
-            diag_ = ldu.diag();
-            n_ = ldu.diag().size();
-        }
+        diag_ = ldu.diag();
     };
+
+    dfInnerMatrix(const lduMesh& mesh):n_(mesh.lduAddr().size()){
+        diag_.resize(n_);
+    };
+
+    dfInnerMatrix(const dfInnerMatrix& other) = delete;
+
+    virtual void valueCopy(const lduMatrix& ldu){
+        const auto& lduDiag = ldu.diag();
+        diagonal_ = ldu.diagonal();
+        symmetric_ = ldu.symmetric();
+        #pragma omp parallel for 
+        for(label i = 0; i < n_; ++i){
+            diag_[i] = lduDiag[i];
+        }
+    }
+
     virtual ~dfInnerMatrix(){};
 
     const label& n() const {return n_;};

@@ -17,10 +17,21 @@ private:
 
     void buildBlocks(const lduMatrix& ldu);
 
+    void buildBlocks(const lduMesh& mesh);
+
 public:
+    dfBlockMatrix(const lduMatrix& ldu);
+
     dfBlockMatrix(const lduMatrix& ldu, const labelList& rowBlockPtr);
 
-    dfBlockMatrix(const lduMatrix& courseLduMatrix, const labelList& fineRowBlockPtr, const labelList& fineToCoarse);
+    // dfBlockMatrix(const lduMatrix& courseLduMatrix, const labelList& fineRowBlockPtr, const labelList& fineToCoarse);
+    dfBlockMatrix(const lduMesh& mesh);
+
+    dfBlockMatrix(const lduMesh& mesh, const labelList& rowBlockPtr);
+
+    // dfBlockMatrix(const lduMesh& courseLduMesh, const labelList& fineRowBlockPtr, const labelList& fineToCoarse);
+
+    void valueCopy(const lduMatrix& ldu);
 
     ~dfBlockMatrix(){};
 

@@ -85,6 +85,105 @@ dfCSRMatrix::dfCSRMatrix(const lduMatrix& ldu):dfInnerMatrix(ldu){
     // Pout << "Exit dfCSRMatrix::dfCSRMatrix(lduMatrix& ldu)" << endl << flush;
 }
 
+dfCSRMatrix::dfCSRMatrix(const lduMesh& mesh):dfInnerMatrix(mesh){
+    // Pout << "Enter dfCSRMatrix::dfCSRMatrix(lduMesh& mesh)" << endl << flush;
+    Info << "Building CSRMatrix n_ : " << n_ << endl;
+    this->rowPtr_.resize(n_ + 1);
+    
+    const labelList& lduLowerAddr = mesh.lduAddr().lowerAddr();
+    const labelList& lduUpperAddr = mesh.lduAddr().upperAddr();
+
+    assert(lduLowerAddr.size() == lduUpperAddr.size());
+
+    label nFaces = lduUpperAddr.size();
+    
+    // lower[i] (lduUpperAddr[i], lduLowerAddr[i]) 
+    // const scalarList& lduLower = ldu.lower();
+    // upper[i] (lduLowerAddr[i], lduUpperAddr[i])
+    // const scalarList& lduUpper = ldu.upper();
+    
+    // const labelUList& owner = mesh.owner();
+    // const labelUList& neighbour = mesh.neighbour();
+    label off_diagonal_nnz_ = 2 * nFaces;
+
+    this->colIdx_.resize(off_diagonal_nnz_);
+    this->values_.resize(off_diagonal_nnz_);
+    this->value_ldu_idx_.resize(off_diagonal_nnz_);
+
+    // compute row_count
+    std::vector<label> row_count(n_, 0);
+    std::vector<label> current_index(n_ + 1);
+
+    // assert(lduLower.size() == lduLowerAddr.size());
+    for(label i = 0; i < nFaces; ++i){
+        label row = lduUpperAddr[i];
+        row_count[row] += 1;
+    }
+    // assert(lduUpper.size() == lduUpperAddr.size());
+    for(label i = 0; i < nFaces; ++i){
+        label row = lduLowerAddr[i];
+        row_count[row] += 1;
+    }
+
+    rowPtr_[0] = 0;
+    current_index[0] = 0;
+    for(label i = 0; i < n_; ++i){
+        rowPtr_[i + 1] = rowPtr_[i] + row_count[i];
+        current_index[i + 1] = rowPtr_[i] + row_count[i];
+    }
+
+    // lower
+    // (lduUpperAddr[i], lduLowerAddr[i])
+    for(label i = 0; i < nFaces; ++i){
+        label r = lduUpperAddr[i];
+        label c = lduLowerAddr[i];
+        label index = current_index[r];
+        colIdx_[index] = c;
+        // values_[index] = lduLower[i];
+        value_ldu_idx_[index] = i;
+        current_index[r] += 1;
+    }
+
+    // for(label rc = 0; rc < n_; ++rc){
+    //     label index = current_index[rc];
+    //     colidx_[index] = rc;
+    //     current_index[rc] += 1;
+    // }
+
+    // upper
+    // (lduLowerAddr[i], lduUpperAddr[i])
+    for(label i = 0; i < nFaces; ++i){
+        label r = lduLowerAddr[i];
+        label c = lduUpperAddr[i];
+        label index = current_index[r];
+        colIdx_[index] = c;
+        // values_[index] = lduUpper[i];
+        value_ldu_idx_[index] = i;
+        current_index[r] += 1;
+    }
+    // Pout << "Exit dfCSRMatrix::dfCSRMatrix(lduMesh& mesh)" << endl << flush;
+}
+
+void dfCSRMatrix::valueCopy(const lduMatrix& ldu){
+    dfInnerMatrix::valueCopy(ldu);
+
+    const scalarList& lduLower = ldu.lower();
+    const scalarList& lduUpper = ldu.upper();
+
+    #pragma omp parallel for
+    for(label r = 0; r < n_; ++r){
+        for(label idx = rowPtr_[r]; idx < rowPtr_[r + 1]; ++idx){
+            label c = colIdx_[idx];
+            if(r > c){
+                values_[idx] = lduLower[value_ldu_idx_[idx]];
+            }else if(r < c){
+                values_[idx] = lduUpper[value_ldu_idx_[idx]];
+            }else{
+                assert(false);
+            }
+        }
+    }
+}
 
 void dfCSRMatrix::SpMV(scalar* const __restrict__ ApsiPtr, const scalar* const __restrict__ psiPtr) const {
     // Pout << "Enter dfCSRMatrix::SpMV(scalar* const __restrict__ ApsiPtr, const scalar* const __restrict__ psiPtr)" << endl << flush;

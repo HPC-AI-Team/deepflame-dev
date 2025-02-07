@@ -262,8 +262,8 @@ Foam::dfGAMGAgglomeration::dfGAMGAgglomeration
     faceFlipMap_(maxLevels_),
     nPatchFaces_(maxLevels_),
     patchFaceRestrictAddressing_(maxLevels_),
-
-    meshLevels_(maxLevels_)
+    meshLevels_(maxLevels_),
+    dfMatrixLevelPatterns_(maxLevels_)
 {
     procCommunicator_.setSize(maxLevels_ + 1, -1);
     if (processorAgglomerate())
@@ -454,6 +454,21 @@ const Foam::lduMesh& Foam::dfGAMGAgglomeration::meshLevel
     }
 }
 
+const Foam::dfMatrix& Foam::dfGAMGAgglomeration::dfMatrixLevel
+(
+    const label i
+) const
+{
+    assert(i > 0);
+    // if (i == 0)
+    // {
+    //     // return dfMatrixPattern_;
+    // }
+    // else
+    // {
+    return dfMatrixLevelPatterns_[i - 1];
+    // }
+}
 
 bool Foam::dfGAMGAgglomeration::hasMeshLevel(const label i) const
 {

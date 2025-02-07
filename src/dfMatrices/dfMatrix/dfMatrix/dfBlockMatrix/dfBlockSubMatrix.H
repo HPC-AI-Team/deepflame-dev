@@ -22,6 +22,9 @@ public:
     const label& nRows() const { return nRows_; }
     const label& nCols() const { return nCols_; }
 
+    virtual void valueCopyOffDiagBlock(const scalar* const __restrict__ lduValuePtr) = 0;
+    virtual void valueCopyDiagBlock(const scalar* const __restrict__ lower, const scalar* const __restrict__ upper) = 0;
+
     virtual void SpMV(
         scalar* const __restrict__ ApsiPtr_offset,
         const scalar* const __restrict__ psiPtr_offset

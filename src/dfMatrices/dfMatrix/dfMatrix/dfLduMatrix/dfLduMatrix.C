@@ -19,6 +19,25 @@ dfLduMatrix::dfLduMatrix(const lduMatrix& ldu):dfInnerMatrix(ldu){
     }
 }
 
+dfLduMatrix::dfLduMatrix(const lduMesh& mesh):dfInnerMatrix(mesh){
+    Info << "Building LduMatrix n_ : " << n_ << endl;
+    lowerAddr_ = mesh.lduAddr().lowerAddr();
+    upperAddr_ = mesh.lduAddr().upperAddr();
+    ownerStartAddr_ = mesh.lduAddr().ownerStartAddr();
+    losortAddr_ = mesh.lduAddr().losortAddr();
+}
+
+void dfLduMatrix::valueCopy(const lduMatrix& ldu){
+    dfInnerMatrix::valueCopy(ldu);
+    if(ldu.hasLower())
+    {
+        lower_ = ldu.lower();
+    }
+    if(ldu.hasUpper())
+    {
+        upper_ = ldu.upper();
+    }
+}
 
 void dfLduMatrix::SpMV(scalar* const __restrict__ ApsiPtr, const scalar* const __restrict__ psiPtr) const {
     const label* const __restrict__ uPtr = upperAddr().begin();

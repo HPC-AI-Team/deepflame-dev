@@ -73,15 +73,17 @@ time_monitor_YEqn_pre += YEqnClock.timeIncrement();
             // YiEqn.relax();
 
 #ifdef USE_DF_MATRIX
-            dfMatrix df_YiEqn(YiEqn, regionPtr);
+            // dfMatrix df_YiEqn(YiEqn, regionPtr);
             auto& psi = const_cast<volScalarField&>(YiEqn.psi());
             auto& source = YiEqn.source();
             auto& internalCoeffs = YiEqn.internalCoeffs();
             auto& boundaryCoeffs = YiEqn.boundaryCoeffs();
 
+            matrix.valueCopy(YiEqn);
             time_monitor_YEqn_convert += YEqnClock.timeIncrement();
 
-            df_YiEqn.solve(psi, source, internalCoeffs, boundaryCoeffs, "Yi");
+            // df_YiEqn.solve(psi, source, internalCoeffs, boundaryCoeffs, "Yi");
+            matrix.solve(psi, source, internalCoeffs, boundaryCoeffs, "Yi");
 #else
             YiEqn.solve("Yi");
 #endif

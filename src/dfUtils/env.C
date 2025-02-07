@@ -10,7 +10,7 @@
 
 namespace Foam{
 
-// int env::REGION_DECOMPOSE_NBLOCKS = env::get_int_default("REGION_DECOMPOSE_NBLOCKS", 16);
+const int env::REGION_DECOMPOSE_NBLOCKS = env::get_int_default("REGION_DECOMPOSE_NBLOCKS", 12);
 const int env::DNN_BATCH_SIZE = env::get_int_default("DNN_BATCH_SIZE", 32768);
 const std::string env::DFMATRIX_INNERMATRIX_TYPE = env::get_string_default("DFMATRIX_INNERMATRIX_TYPE", "LDU");
 

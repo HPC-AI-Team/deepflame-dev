@@ -41,19 +41,19 @@ Info << "Enter rhoEqn " << endl;
 
     time_monitor_rhoEqn_pre += rhoEqnClock.timeIncrement();
 
-#ifdef USE_DF_MATRIX
-    dfMatrix df_rhoEqn(rhoEqn, regionPtr);
-    auto& psi = const_cast<volScalarField&>(rhoEqn.psi());
-    auto& source = rhoEqn.source();
-    auto& internalCoeffs = rhoEqn.internalCoeffs();
-    auto& boundaryCoeffs = rhoEqn.boundaryCoeffs();
+// #ifdef USE_DF_MATRIX
+//     dfMatrix df_rhoEqn(rhoEqn, regionPtr);
+//     auto& psi = const_cast<volScalarField&>(rhoEqn.psi());
+//     auto& source = rhoEqn.source();
+//     auto& internalCoeffs = rhoEqn.internalCoeffs();
+//     auto& boundaryCoeffs = rhoEqn.boundaryCoeffs();
 
-    time_monitor_rhoEqn_convert += rhoEqnClock.timeIncrement();
+//     time_monitor_rhoEqn_convert += rhoEqnClock.timeIncrement();
 
-    df_rhoEqn.solve(psi, source, internalCoeffs, boundaryCoeffs);
-#else
+//     df_rhoEqn.solve(psi, source, internalCoeffs, boundaryCoeffs);
+// #else
     rhoEqn.solve();
-#endif
+// #endif
 
     time_monitor_rhoEqn_solve += rhoEqnClock.timeIncrement();
     time_monitor_rhoEqn += rhoEqnClock.elapsedTime();

@@ -9,7 +9,7 @@ class env{
 
 public:
 
-    // static const int REGION_DECOMPOSE_NBLOCKS;
+    static const int REGION_DECOMPOSE_NBLOCKS;
     static const int DNN_BATCH_SIZE;
     static const std::string DFMATRIX_INNERMATRIX_TYPE;
 

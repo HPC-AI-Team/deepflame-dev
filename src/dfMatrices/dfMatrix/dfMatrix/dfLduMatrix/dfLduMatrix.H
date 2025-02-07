@@ -29,6 +29,10 @@ private:
 public:
     dfLduMatrix(const lduMatrix& ldu);
 
+    dfLduMatrix(const lduMesh& mesh);
+
+    void valueCopy(const lduMatrix& ldu);
+
     ~dfLduMatrix(){};
 
     InnerMatrixFormat getFormat() const {return InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_LDU;};

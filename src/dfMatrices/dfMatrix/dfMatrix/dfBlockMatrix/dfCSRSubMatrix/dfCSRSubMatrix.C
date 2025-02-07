@@ -1,6 +1,42 @@
 #include "dfCSRSubMatrix.H"
-
+#include <cassert>
 namespace Foam{
+
+void dfCSRSubMatrix::valueCopyOffDiagBlock(const scalar* const __restrict__ lduValuePt){
+    // Info << "Enter dfCSRSubMatrix::valueCopyOffDiagBlock(const scalar* const __restrict__ lduValuePt)" << endl << flush;
+    const label* const __restrict__ rowPtr = rowPtr_.get();
+    const label* const __restrict__ value_ldu_idx_ptr_= value_ldu_idx_.get();
+    scalar* const __restrict__ valuePtr = values_.get();
+
+    for(label r = 0; r < nRows_; ++r){
+        for(label idx = rowPtr[r]; idx < rowPtr[r+1]; ++idx){
+            valuePtr[idx] = lduValuePt[value_ldu_idx_ptr_[idx]];
+        }
+    }
+    // Info << "Exit dfCSRSubMatrix::valueCopyOffDiagBlock(const scalar* const __restrict__ lduValuePt)" << endl << flush;
+}
+
+void dfCSRSubMatrix::valueCopyDiagBlock(const scalar* const __restrict__ lower, const scalar* const __restrict__ upper){
+    // Info << "Enter dfCSRSubMatrix::valueCopyDiagBlock(const scalar* const __restrict__ lower, const scalar* const __restrict__ upper)" << endl << flush;
+    const label* const __restrict__ rowPtr = rowPtr_.get();
+    const label* const __restrict__ colIdxPtr = colIdx_.get();
+    const label* const __restrict__ value_ldu_idx_ptr_= value_ldu_idx_.get();
+    scalar* const __restrict__ valuePtr = values_.get();
+
+    for(label r = 0; r < nRows_; ++r){
+        for(label idx = rowPtr[r]; idx < rowPtr[r+1]; ++idx){
+            label c = colIdxPtr[idx];
+            if(r > c){
+                valuePtr[idx] = lower[value_ldu_idx_ptr_[idx]];
+            }else if(r < c){
+                valuePtr[idx] = upper[value_ldu_idx_ptr_[idx]];
+            }else{
+                assert(false);
+            }
+        }
+    }
+    // Info << "Exit dfCSRSubMatrix::valueCopyDiagBlock(const scalar* const __restrict__ lower, const scalar* const __restrict__ upper)" << endl << flush;
+}
 
 void dfCSRSubMatrix::SpMV(scalar* const __restrict__ ApsiPtr_offset, const scalar* const __restrict__ psiPtr_offset) const {
     const label* const __restrict__ rowPtr = rowPtr_.get();

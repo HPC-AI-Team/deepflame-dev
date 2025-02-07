@@ -12,6 +12,8 @@ private:
     labelList colIdx_;
     scalarList values_;
 
+    labelList value_ldu_idx_;
+
     const labelList& rowPtr() const {return rowPtr_;};
     const labelList& colIdx() const {return colIdx_;};
     const scalarList& values() const {return values_;};
@@ -22,6 +24,10 @@ private:
 
 public:
     dfCSRMatrix(const lduMatrix& ldu);
+
+    dfCSRMatrix(const lduMesh& mesh);
+
+    void valueCopy(const lduMatrix& ldu);
 
     ~dfCSRMatrix(){};
 
