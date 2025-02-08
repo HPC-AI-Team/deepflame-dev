@@ -62,6 +62,7 @@ Description
 #include "PstreamGlobals.H"
 #include "basicThermo.H"
 #include "CombustionModel.H"
+#include "CorrectPhi.H"
 
 // renumber
 #include "dynamicFvMesh.H"
@@ -134,24 +135,31 @@ int main(int argc, char *argv[])
     Info << "postProcess_time = " << postProcess_time << " s" << endl;
     Info << "listOptions_time = " << listOptions_time << " s" << endl;
     Info << "setRootCase2_time = " << setRootCase2_time << " s" << endl;
+
     #include "listOutput.H"
     double listOutput_time = initClock.timeIncrement();
     Info << "listOutput_time = " << listOutput_time << " s" << endl;
+
     #include "createTime.H"
     double createTime_time = initClock.timeIncrement();
     Info << "createTime_time = " << createTime_time << " s" << endl;
+
     #include "createDynamicFvMesh.H"
     double createDynamicFvMesh_time = initClock.timeIncrement();
     Info << "createDynamicFvMesh_time = " << createDynamicFvMesh_time << " s" << endl;
+
     #include "createDyMControls.H"
     double createDyMControls_time = initClock.timeIncrement();
     Info << "createDyMControls_time = " << createDyMControls_time << " s" << endl;
+
     #include "initContinuityErrs.H"
     double initContinuityErrs_time = initClock.timeIncrement();
     Info << "initContinuityErrs_time = " << initContinuityErrs_time << " s" << endl;
+
     #include "createFields.H"
     double createFields_time = initClock.timeIncrement();
     Info << "createFields_time = " << createFields_time << " s" << endl;
+
     #include "createRhoUfIfPresent.H"
     double createRhoUfIfPresent_time = initClock.timeIncrement();
     Info << "createRhoUfIfPresent_time = " << createRhoUfIfPresent_time << " s" << endl;
@@ -198,8 +206,29 @@ int main(int argc, char *argv[])
     double proc_info_gather_time = initClock.timeIncrement();
     Info << "proc_info_gather_time = " << proc_info_gather_time << " s" << endl;
 
-    // mesh renumbering
+    int refineLevel = CanteraTorchProperties.subDict("RefineSettings").lookupOrDefault("refineLevel", 0);
 
+    Info << "refineLevel : " << refineLevel << endl; 
+    
+    double refine_time = 0.;
+
+    while (runTime.run())
+    {
+        while (refineLevel)
+        {
+            runTime++;
+            #include "Refine.H"
+            double refine_once_time = initClock.timeIncrement();
+            refine_time += refine_once_time;
+            // csrPattern refine(mesh);
+            // refine.write_mtx("refine_" + std::to_string(refine_count));
+            Info << "refine once time : " << refine_once_time << endl;
+
+        }
+        break;
+    }
+
+    // mesh renumbering
     csrPattern pattern_before(mesh);
     if(mpirank == 0 || mpirank == 1){
         pattern_before.write_mtx("pattern_before");
@@ -223,16 +252,17 @@ int main(int argc, char *argv[])
 
     if (nBlocks > 1){
         BlockPattern blockPattern(pattern_after, regionPtr);
-    }else if(nBlocks == 1){
-        regionPtr.resize(17);
-        // partition nCells into 16 regions
-        for(label i = 0; i < 16; ++i){
-            label regionStart = nCell * i / label(16);
-            regionPtr[i] = regionStart;
-        }
-        regionPtr[16] = nCell;
-        BlockPattern blockPattern(pattern_after, regionPtr);
     }
+    // if(nBlocks == 1){
+    //     regionPtr.resize(17);
+    //     // partition nCells into 16 regions
+    //     for(label i = 0; i < 16; ++i){
+    //         label regionStart = nCell * i / label(16);
+    //         regionPtr[i] = regionStart;
+    //     }
+    //     regionPtr[16] = nCell;
+    //     BlockPattern blockPattern(pattern_after, regionPtr);
+    // }
 
     double block_pattern_time = initClock.timeIncrement();
     Info << "block_pattern_time = " << block_pattern_time << " s" << endl;
@@ -266,6 +296,7 @@ int main(int argc, char *argv[])
     Info << "turbulence_validate_time = " << turbulence_validate_time << " s " << turbulence_validate_time * 100. / total_init_time << "%" << endl;
     Info << "LTS_time = " << LTS_time << " s " << LTS_time * 100. / total_init_time << "%" << endl;
     Info << "proc_info_gather_time = " << proc_info_gather_time << " s " << proc_info_gather_time * 100. / total_init_time << "%" << endl;
+    Info << "refine_time = " << refine_time << " s " << refine_time * 100. / total_init_time << "%" << endl;
     Info << "pattern_before_time = " << pattern_before_time << " s " << pattern_before_time * 100. / total_init_time << "%" << endl;
     Info << "renumber_time = " << renumber_time << " s " << renumber_time * 100. / total_init_time << "%" << endl;
     Info << "pattern_after_time = " << pattern_after_time << " s " << pattern_after_time * 100. / total_init_time << "%" << endl;
