@@ -132,12 +132,12 @@ while (pimple.correctNonOrthogonal())
     auto& internalCoeffs = pEqn.internalCoeffs();
     auto& boundaryCoeffs = pEqn.boundaryCoeffs();
 
-    matrix.valueCopy(pEqn);
+    matrixPtr->valueCopy(pEqn);
 
     time_monitor_pEqn_convert += pEqnClock.timeIncrement();
 
     // df_pEqn.solve(psi, source, internalCoeffs, boundaryCoeffs);
-    matrix.solve(psi, source, internalCoeffs, boundaryCoeffs);
+    matrixPtr->solve(psi, source, internalCoeffs, boundaryCoeffs);
     #else
     pEqn.solve();
     #endif

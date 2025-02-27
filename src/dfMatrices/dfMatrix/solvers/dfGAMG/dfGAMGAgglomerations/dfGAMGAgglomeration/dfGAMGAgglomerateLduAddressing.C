@@ -26,6 +26,7 @@ License
 #include "dfGAMGAgglomeration.H"
 #include "dfGAMGInterface.H"
 #include "processordfGAMGInterface.H"
+#include "env.H"
 
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 
@@ -347,11 +348,25 @@ void Foam::dfGAMGAgglomeration::agglomerateLduAddressing
         )
     );
 
-    dfMatrixLevelPatterns_.set
-    (
-        fineLevelIndex,
-        new dfMatrix(meshLevels_[fineLevelIndex])
-    );
+    if(env::REGION_DECOMPOSE_NBLOCKS == 1){
+        dfMatrixLevelPatterns_.set
+        (
+            fineLevelIndex,
+            new dfMatrix(meshLevels_[fineLevelIndex])
+        );
+    }else{
+        labelList regionPtr(env::REGION_DECOMPOSE_NBLOCKS + 1);
+        // partition nCoarseCells into REGION_DECOMPOSE_NBLOCKS regions
+        forAll(regionPtr, i){
+            regionPtr[i] = nCoarseCells * i / env::REGION_DECOMPOSE_NBLOCKS;
+        }
+        regionPtr[env::REGION_DECOMPOSE_NBLOCKS] = nCoarseCells;
+        dfMatrixLevelPatterns_.set
+        (
+            fineLevelIndex,
+            new dfMatrix(meshLevels_[fineLevelIndex], regionPtr)
+        );
+    }
 
     if (debug & 2)
     {

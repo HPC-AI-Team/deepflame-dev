@@ -77,11 +77,11 @@ time_monitor_EEqn_pre += EEqnClock.timeIncrement();
     auto& internalCoeffs = EEqn.internalCoeffs();
     auto& boundaryCoeffs = EEqn.boundaryCoeffs();
 
-    matrix.valueCopy(EEqn);
+    matrixPtr->valueCopy(EEqn);
     time_monitor_EEqn_convert += EEqnClock.timeIncrement();
 
     // df_EEqn.solve(psi, source, internalCoeffs, boundaryCoeffs, "ha");
-    matrix.solve(psi, source, internalCoeffs, boundaryCoeffs, "ha");
+    matrixPtr->solve(psi, source, internalCoeffs, boundaryCoeffs, "ha");
 #else
     EEqn.solve("ha");
 #endif

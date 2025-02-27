@@ -161,11 +161,11 @@ time_monitor_YEqn_pre += YEqnClock.timeIncrement();
             auto& internalCoeffs = YiEqn.internalCoeffs();
             auto& boundaryCoeffs = YiEqn.boundaryCoeffs();
 
-            matrix.valueCopy(YiEqn);
+            matrixPtr->valueCopy(YiEqn);
             time_monitor_YEqn_convert += YEqnClock.timeIncrement();
 
             // df_YiEqn.solve(psi, source, internalCoeffs, boundaryCoeffs, "Yi");
-            matrix.solve(psi, source, internalCoeffs, boundaryCoeffs, "Yi");
+            matrixPtr->solve(psi, source, internalCoeffs, boundaryCoeffs, "Yi");
 #else
             YiEqn.solve("Yi");
 #endif

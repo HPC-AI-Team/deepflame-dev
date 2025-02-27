@@ -1,6 +1,80 @@
 #include "dfCSRSubMatrix.H"
 #include <cassert>
+
 namespace Foam{
+
+dfCSRSubMatrix::dfCSRSubMatrix(label nRows, label nCols, const std::vector<std::tuple<label,label,scalar>>& rcvList):dfBlockSubMatrix(nRows, nCols){
+    // count nnz per row
+    std::vector<label> nnzPerRow(nRows, 0);
+    for(const auto& entry: rcvList){
+        label r = std::get<0>(entry);
+        nnzPerRow[r] += 1;
+    }
+
+    rowPtr_ = std::make_unique<label[]>(nRows + 1);
+    std::vector<label> curIndexPerRow(nRows + 1);
+
+    rowPtr_[0] = 0;
+    curIndexPerRow[0] = 0;
+    for(label i = 0; i < nRows; ++i){
+        rowPtr_[i + 1] = rowPtr_[i] + nnzPerRow[i];
+        curIndexPerRow[i + 1] = rowPtr_[i + 1];
+    }
+
+    label nnz_block = rowPtr_[nRows];
+
+    colIdx_ = std::make_unique<label[]>(nnz_block);
+    values_ = std::make_unique<scalar[]>(nnz_block);
+
+    for(const auto& entry: rcvList){
+        label r = std::get<0>(entry);
+        label c = std::get<1>(entry);
+        scalar v = std::get<2>(entry);
+        label rowIdx = r;
+        label idx = curIndexPerRow[rowIdx];
+        colIdx_[idx] = c;
+        values_[idx] = v;
+        curIndexPerRow[rowIdx] += 1;
+    }
+
+    value_ldu_idx_ = nullptr;
+}
+
+dfCSRSubMatrix::dfCSRSubMatrix(label nRows, label nCols, const std::vector<std::tuple<label,label,label>>& rciList):dfBlockSubMatrix(nRows, nCols){
+    // count nnz per row
+    std::vector<label> nnzPerRow(nRows, 0);
+    for(const auto& entry: rciList){
+        label r = std::get<0>(entry);
+        nnzPerRow[r] += 1;
+    }
+
+    rowPtr_ = std::make_unique<label[]>(nRows + 1);
+    std::vector<label> curIndexPerRow(nRows + 1);
+
+    rowPtr_[0] = 0;
+    curIndexPerRow[0] = 0;
+    for(label i = 0; i < nRows; ++i){
+        rowPtr_[i + 1] = rowPtr_[i] + nnzPerRow[i];
+        curIndexPerRow[i + 1] = rowPtr_[i + 1];
+    }
+
+    label nnz_block = rowPtr_[nRows];
+
+    colIdx_ = std::make_unique<label[]>(nnz_block);
+    values_ = std::make_unique<scalar[]>(nnz_block);
+    value_ldu_idx_ = std::make_unique<label[]>(nnz_block);
+
+    for(const auto& entry: rciList){
+        label r = std::get<0>(entry);
+        label c = std::get<1>(entry);
+        label faceIndex = std::get<2>(entry);
+        label rowIdx = r;
+        label idx = curIndexPerRow[rowIdx];
+        colIdx_[idx] = c;
+        value_ldu_idx_[idx] = faceIndex;
+        curIndexPerRow[rowIdx] += 1;
+    }
+}
 
 void dfCSRSubMatrix::valueCopyOffDiagBlock(const scalar* const __restrict__ lduValuePt){
     // Info << "Enter dfCSRSubMatrix::valueCopyOffDiagBlock(const scalar* const __restrict__ lduValuePt)" << endl << flush;

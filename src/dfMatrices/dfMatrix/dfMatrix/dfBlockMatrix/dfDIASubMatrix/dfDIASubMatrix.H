@@ -2,25 +2,22 @@
 
 #include "dfBlockSubMatrix.H"
 #include <memory>
-#include <vector>
-#include <tuple>
+
 
 namespace Foam{
 
-class dfCSRSubMatrix : public dfBlockSubMatrix{
+class dfDIASubMatrix : public dfBlockSubMatrix{
 private:
 
-    std::unique_ptr<label[]> rowPtr_;
-    std::unique_ptr<label[]> colIdx_;
-    std::unique_ptr<scalar[]> values_;
-    std::unique_ptr<label[]> value_ldu_idx_;
+    std::unique_ptr<label> rowPtr_;
+    std::unique_ptr<label> colIdx_;
+    std::unique_ptr<scalar> values_;
+    std::unique_ptr<label> value_ldu_idx_;
 
 public:
-    dfCSRSubMatrix(label nRows, label nCols, const std::vector<std::tuple<label,label,scalar>>& rcvList);
-    dfCSRSubMatrix(label nRows, label nCols, const std::vector<std::tuple<label,label,label>>& rciList);
-    // dfCSRSubMatrix(label nRows, label nCols, label* rowPtr, label* colIdx, scalar* values):dfBlockSubMatrix(nRows, nCols),rowPtr_(rowPtr),colIdx_(colIdx),values_(values),value_ldu_idx_(nullptr){}
-    // dfCSRSubMatrix(label nRows, label nCols, label* rowPtr, label* colIdx, scalar* values, label* value_ldu_idx):dfBlockSubMatrix(nRows, nCols),rowPtr_(rowPtr),colIdx_(colIdx),values_(values),value_ldu_idx_(value_ldu_idx){}
-    ~dfCSRSubMatrix(){}
+    dfDIASubMatrix(label nRows, label nCols, label* rowPtr, label* colIdx, scalar* values):dfBlockSubMatrix(nRows, nCols),rowPtr_(rowPtr),colIdx_(colIdx),values_(values),value_ldu_idx_(nullptr){}
+    dfDIASubMatrix(label nRows, label nCols, label* rowPtr, label* colIdx, scalar* values, label* value_ldu_idx):dfBlockSubMatrix(nRows, nCols),rowPtr_(rowPtr),colIdx_(colIdx),values_(values),value_ldu_idx_(value_ldu_idx){}
+    ~dfDIASubMatrix(){}
 
     void valueCopyOffDiagBlock(const scalar* const __restrict__ lduValuePtr);
     void valueCopyDiagBlock(const scalar* const __restrict__ lower, const scalar* const __restrict__ upper);

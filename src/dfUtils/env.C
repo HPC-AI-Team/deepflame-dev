@@ -81,7 +81,7 @@ void env::show(){
     Info << endl;
     Info << "env show --------------------------------" << endl;
     Info << "dnn_batch_size : " << DNN_BATCH_SIZE << endl;
-    // Info << "region_decompose_nblocks : " << REGION_DECOMPOSE_NBLOCKS << endl;
+    Info << "region_decompose_nblocks : " << REGION_DECOMPOSE_NBLOCKS << endl;
     Info << "dfmatrix_innermatrix_type : " << DFMATRIX_INNERMATRIX_TYPE << endl;
     Info << "max_threads : " << omp_get_max_threads() << endl;
     #ifdef __ARM_FEATURE_SVE

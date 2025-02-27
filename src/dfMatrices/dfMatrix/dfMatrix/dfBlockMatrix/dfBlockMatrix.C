@@ -25,7 +25,9 @@ void dfBlockMatrix::buildBlocks(const lduMatrix& ldu){
         scalar v = lduLower[i];
         label rbid = std::upper_bound(rowBlockPtr_.begin(), rowBlockPtr_.end(), r) - rowBlockPtr_.begin() - 1;
         label cbid = std::upper_bound(rowBlockPtr_.begin(), rowBlockPtr_.end(), c) - rowBlockPtr_.begin() - 1;
-        blocksTmp[bid2d(rbid, cbid)].push_back({r,c,v});
+        label rowStart = rowBlockPtr_[rbid];
+        label colStart = rowBlockPtr_[cbid];
+        blocksTmp[bid2d(rbid, cbid)].push_back({r - rowStart, c - colStart, v});
     }
 
     // upper
@@ -36,60 +38,22 @@ void dfBlockMatrix::buildBlocks(const lduMatrix& ldu){
         scalar v = lduUpper[i];
         label rbid = std::upper_bound(rowBlockPtr_.begin(), rowBlockPtr_.end(), r) - rowBlockPtr_.begin() - 1;
         label cbid = std::upper_bound(rowBlockPtr_.begin(), rowBlockPtr_.end(), c) - rowBlockPtr_.begin() - 1;
-        blocksTmp[bid2d(rbid, cbid)].push_back({r,c,v});
+        label rowStart = rowBlockPtr_[rbid];
+        label colStart = rowBlockPtr_[cbid];
+        blocksTmp[bid2d(rbid, cbid)].push_back({r - rowStart, c - colStart, v});
     }
 
     // convert each block to CSR
     for(label rbid = 0; rbid < rowBlockCount_; ++rbid){
         for(label cbid = 0; cbid < rowBlockCount_; ++cbid){
             label bid = bid2d(rbid, cbid);
-            const std::vector<std::tuple<label,label,scalar>>& block = blocksTmp[bid];
+            const auto& block = blocksTmp[bid];
             if(block.size() == 0){
                 continue;
             }
-            
-            label rowStart = rowBlockPtr_[rbid];
-            label rowEnd = rowBlockPtr_[rbid + 1];
-            label rowLen = rowEnd - rowStart;
-            label colStart = rowBlockPtr_[cbid];
-            label colEnd = rowBlockPtr_[cbid + 1];
-            label colLen = colEnd - colStart;
-
-            // count nnz per row
-            std::vector<label> nnzPerRow(rowLen, 0);
-            
-            for(const auto& entry: block){
-                label r = std::get<0>(entry);
-                nnzPerRow[r - rowStart] += 1;
-            }
-
-            std::unique_ptr<label[]> rowPtr = std::make_unique<label[]>(rowLen + 1);
-            std::vector<label> curIndexPerRow(rowLen + 1);
-
-            rowPtr[0] = 0;
-            curIndexPerRow[0] = 0;
-            for(label i = 0; i < rowLen; ++i){
-                rowPtr[i + 1] = rowPtr[i] + nnzPerRow[i];
-                curIndexPerRow[i + 1] = rowPtr[i + 1];
-            }
-
-            label nnz_block = rowPtr[rowLen];
-
-            std::unique_ptr<label[]> colIdx = std::make_unique<label[]>(nnz_block);
-            std::unique_ptr<scalar[]> values = std::make_unique<scalar[]>(nnz_block);
-
-            for(const auto& entry: block){
-                label r = std::get<0>(entry);
-                label c = std::get<1>(entry);
-                scalar v = std::get<2>(entry);
-                label rowIdx = r - rowStart;
-                label idx = curIndexPerRow[rowIdx];
-                colIdx[idx] = c - colStart;
-                values[idx] = v;
-                curIndexPerRow[rowIdx] += 1;
-            }
-
-            blocks_[bid] = std::make_unique<dfCSRSubMatrix>(rowLen, colLen, rowPtr.release(), colIdx.release(), values.release());
+            label rowLen = rowBlockPtr_[rbid + 1] - rowBlockPtr_[rbid];
+            label colLen = rowBlockPtr_[cbid + 1] - rowBlockPtr_[cbid];
+            blocks_[bid] = std::make_unique<dfCSRSubMatrix>(rowLen, colLen, block);
         }
     }
     // Info << "Exit dfBlockMatrix::buildBlocks" << endl;
@@ -114,8 +78,9 @@ void dfBlockMatrix::buildBlocks(const lduMesh& mesh){
         // scalar v = lduLower[i];
         label rbid = std::upper_bound(rowBlockPtr_.begin(), rowBlockPtr_.end(), r) - rowBlockPtr_.begin() - 1;
         label cbid = std::upper_bound(rowBlockPtr_.begin(), rowBlockPtr_.end(), c) - rowBlockPtr_.begin() - 1;
-        assert(r > c);
-        blocksTmp[bid2d(rbid, cbid)].push_back({r,c,i});
+        label rowStart = rowBlockPtr_[rbid];
+        label colStart = rowBlockPtr_[cbid];
+        blocksTmp[bid2d(rbid, cbid)].push_back({r - rowStart, c - colStart, i});
     }
 
     // upper
@@ -126,8 +91,9 @@ void dfBlockMatrix::buildBlocks(const lduMesh& mesh){
         // scalar v = lduUpper[i];
         label rbid = std::upper_bound(rowBlockPtr_.begin(), rowBlockPtr_.end(), r) - rowBlockPtr_.begin() - 1;
         label cbid = std::upper_bound(rowBlockPtr_.begin(), rowBlockPtr_.end(), c) - rowBlockPtr_.begin() - 1;
-        assert(r < c);
-        blocksTmp[bid2d(rbid, cbid)].push_back({r,c,i});
+        label rowStart = rowBlockPtr_[rbid];
+        label colStart = rowBlockPtr_[cbid];
+        blocksTmp[bid2d(rbid, cbid)].push_back({r - rowStart, c - colStart, i});
     }
 
     // convert each block to CSR
@@ -138,60 +104,9 @@ void dfBlockMatrix::buildBlocks(const lduMesh& mesh){
             if(block.size() == 0){
                 continue;
             }
-            
-            label rowStart = rowBlockPtr_[rbid];
-            label rowEnd = rowBlockPtr_[rbid + 1];
-            label rowLen = rowEnd - rowStart;
-            label colStart = rowBlockPtr_[cbid];
-            label colEnd = rowBlockPtr_[cbid + 1];
-            label colLen = colEnd - colStart;
-
-            // count nnz per row
-            std::vector<label> nnzPerRow(rowLen, 0);
-            
-            for(const auto& entry: block){
-                label r = std::get<0>(entry);
-                nnzPerRow[r - rowStart] += 1;
-            }
-
-            std::unique_ptr<label[]> rowPtr = std::make_unique<label[]>(rowLen + 1);
-            std::vector<label> curIndexPerRow(rowLen + 1);
-
-            rowPtr[0] = 0;
-            curIndexPerRow[0] = 0;
-            for(label i = 0; i < rowLen; ++i){
-                rowPtr[i + 1] = rowPtr[i] + nnzPerRow[i];
-                curIndexPerRow[i + 1] = rowPtr[i + 1];
-            }
-
-            label nnz_block = rowPtr[rowLen];
-
-            std::unique_ptr<label[]> colIdx = std::make_unique<label[]>(nnz_block);
-            std::unique_ptr<scalar[]> values = std::make_unique<scalar[]>(nnz_block);
-            std::unique_ptr<label[]> value_ldu_idx_ = std::make_unique<label[]>(nnz_block);
-
-            for(label i = 0; i < nnz_block; ++i){
-                value_ldu_idx_[i] = -1;
-            }
-
-            for(const auto& entry: block){
-                label r = std::get<0>(entry);
-                label c = std::get<1>(entry);
-                // scalar v = std::get<2>(entry);
-                label faceIndex = std::get<2>(entry);
-                label rowIdx = r - rowStart;
-                label idx = curIndexPerRow[rowIdx];
-                colIdx[idx] = c - colStart;
-                // values[idx] = v;
-                value_ldu_idx_[idx] = faceIndex;
-                curIndexPerRow[rowIdx] += 1;
-            }
-
-            for(label i = 0; i < nnz_block; ++i){
-                assert(value_ldu_idx_[i] != -1);
-            }
-
-            blocks_[bid] = std::make_unique<dfCSRSubMatrix>(rowLen, colLen, rowPtr.release(), colIdx.release(), values.release(), value_ldu_idx_.release());
+            label rowLen = rowBlockPtr_[rbid + 1] - rowBlockPtr_[rbid];
+            label colLen = rowBlockPtr_[cbid + 1] - rowBlockPtr_[cbid];
+            blocks_[bid] = std::make_unique<dfCSRSubMatrix>(rowLen, colLen, block);
         }
     }
 }
@@ -271,7 +186,7 @@ dfBlockMatrix::dfBlockMatrix(const lduMesh& mesh, const labelList& rowBlockPtr):
 // }
 
 void dfBlockMatrix::valueCopy(const lduMatrix& ldu){
-    Info << "Enter dfBlockMatrix::valueCopy(const lduMatrix& ldu)" << endl << flush;
+    // Info << "Enter dfBlockMatrix::valueCopy(const lduMatrix& ldu)" << endl << flush;
     dfInnerMatrix::valueCopy(ldu);
     const auto& lower = ldu.lower();
     const auto& upper = ldu.upper();
@@ -294,7 +209,7 @@ void dfBlockMatrix::valueCopy(const lduMatrix& ldu){
             }
         }
     }
-    Info << "Exit dfBlockMatrix::valueCopy(const lduMatrix& ldu)" << endl << flush;
+    // Info << "Exit dfBlockMatrix::valueCopy(const lduMatrix& ldu)" << endl << flush;
 }
 
 void dfBlockMatrix::SpMV(scalar* const __restrict__ ApsiPtr, const scalar* const __restrict__ psiPtr) const {

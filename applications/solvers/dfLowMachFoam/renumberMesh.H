@@ -154,7 +154,6 @@ if (readDict)
 
     blockSize = renumberDict.lookupOrDefault("blockSize", 0);
     nBlocks = renumberDict.lookupOrDefault("nBlocks", 1); 
-    assert(env::REGION_DECOMPOSE_NBLOCKS == nBlocks);
     // if (blockSize > 0)
     // {
     //     Info<< "Ordering cells into regions of size " << blockSize

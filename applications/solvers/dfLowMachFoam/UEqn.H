@@ -46,12 +46,12 @@ time_monitor_UEqn_pre_check += UEqnClock.timeIncrement();
     auto& internalCoeffs = UEqn.internalCoeffs();
     auto& boundaryCoeffs = UEqn.boundaryCoeffs();
 
-    matrix.valueCopy(UEqn);
+    matrixPtr->valueCopy(UEqn);
 
     time_monitor_UEqn_convert += UEqnClock.timeIncrement();
 
     // df_UEqnSolve.solve(psi, source, internalCoeffs, boundaryCoeffs);
-    matrix.solve(psi, source, internalCoeffs, boundaryCoeffs);
+    matrixPtr->solve(psi, source, internalCoeffs, boundaryCoeffs);
 #else
     UEqnSolve.solve();
 #endif

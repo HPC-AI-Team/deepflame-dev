@@ -53,9 +53,7 @@ public:
     void valueCopy(lduMatrix& ldu);
 
     // Copy constructor
-    dfMatrix(const dfMatrix& other):lduMatrixPtr_(other.lduMatrixPtr_),innerMatrixPtr_(other.innerMatrixPtr_){
-        Info << "Warning : In df Copy Constructor !!!" << endl;
-    }
+    dfMatrix(const dfMatrix& other):lduMatrixPtr_(other.lduMatrixPtr_),innerMatrixPtr_(other.innerMatrixPtr_){}
 
     //- Destructor
     ~dfMatrix(){};

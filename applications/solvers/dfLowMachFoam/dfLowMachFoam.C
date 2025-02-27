@@ -113,10 +113,10 @@ int offset;
 #include "clockTime.H"
 
 #define USE_DF_MATRIX
-// #define OPT_GenMatrix_E
-// #define OPT_GenMatrix_Y
-// #define OPT_GenMatrix_U
-// #define OPT_GenMatrix_p
+#define OPT_GenMatrix_E
+#define OPT_GenMatrix_Y
+#define OPT_GenMatrix_U
+#define OPT_GenMatrix_p
 // #define OPT_GenMatrix_Y_check
 // #define OPT_GenMatrix_E_check
 // #define OPT_GenMatrix_U_check
@@ -190,24 +190,20 @@ int main(int argc, char *argv[])
     MPI_Comm_rank(MPI_COMM_WORLD, &mpirank);
     MPI_Comm_size(MPI_COMM_WORLD, &mpisize);
 
-    label nCell = mesh.nCells();
-    std::vector<label> nCells(mpisize);
-    MPI_Gather(&nCell, 1, MPI_LABEL, nCells.data(), 1, MPI_LABEL, 0, MPI_COMM_WORLD);
-    label total_nCell = 0;
-    label min_nCell = std::numeric_limits<label>::max();
-    label max_nCell = 0;
-    Info << "nCells : " << endl;
-    for(int i = 0; i < mpisize; ++i){
-        total_nCell += nCells[i];
-        min_nCell = std::min(min_nCell, nCells[i]);
-        max_nCell = std::max(max_nCell, nCells[i]);
-        Info <<  "\t" << i << " : " << nCells[i] << endl;
+    // nCell info per proc before renumbering
+    {
+        label nCell = mesh.nCells();
+        label total_nCell = 0;
+        label min_nCell = 0;
+        label max_nCell = 0;
+        MPI_Allreduce(&nCell, &total_nCell, 1, MPI_LABEL, MPI_SUM, MPI_COMM_WORLD);
+        MPI_Allreduce(&nCell, &min_nCell, 1, MPI_LABEL, MPI_MIN, MPI_COMM_WORLD);
+        MPI_Allreduce(&nCell, &max_nCell, 1, MPI_LABEL, MPI_MAX, MPI_COMM_WORLD);
+        Info << "total nCell : " << total_nCell << endl;
+        Info << "avg nCell : " << static_cast<double>(total_nCell) / mpisize << endl;
+        Info << "min nCell : " << min_nCell << endl;
+        Info << "max nCell : " << max_nCell << endl;
     }
-    Info << endl;
-    Info << "total nCell : " << total_nCell << endl;
-    Info << "avg nCell : " << static_cast<double>(total_nCell) / mpisize << endl;
-    Info << "min nCell : " << min_nCell << endl;
-    Info << "max nCell : " << max_nCell << endl;
 
     double proc_info_gather_time = initClock.timeIncrement();
     Info << "proc_info_gather_time = " << proc_info_gather_time << " s" << endl;
@@ -234,6 +230,21 @@ int main(int argc, char *argv[])
         break;
     }
 
+    // nCell info per proc after renumbering
+    {
+        label nCell = mesh.nCells();
+        label total_nCell = 0;
+        label min_nCell = 0;
+        label max_nCell = 0;
+        MPI_Allreduce(&nCell, &total_nCell, 1, MPI_LABEL, MPI_SUM, MPI_COMM_WORLD);
+        MPI_Allreduce(&nCell, &min_nCell, 1, MPI_LABEL, MPI_MIN, MPI_COMM_WORLD);
+        MPI_Allreduce(&nCell, &max_nCell, 1, MPI_LABEL, MPI_MAX, MPI_COMM_WORLD);
+        Info << "total nCell : " << total_nCell << endl;
+        Info << "avg nCell : " << static_cast<double>(total_nCell) / mpisize << endl;
+        Info << "min nCell : " << min_nCell << endl;
+        Info << "max nCell : " << max_nCell << endl;
+    }
+
     // mesh renumbering
     csrPattern pattern_before(mesh);
     if(mpirank == 0 || mpirank == 1){
@@ -258,17 +269,20 @@ int main(int argc, char *argv[])
 
     if (nBlocks > 1){
         BlockPattern blockPattern(pattern_after, regionPtr);
+    }else if (nBlocks == 1 && env::REGION_DECOMPOSE_NBLOCKS > 1){
+        regionPtr.resize(env::REGION_DECOMPOSE_NBLOCKS + 1);
+        // partition nCells into env::REGION_DECOMPOSE_NBLOCKS regions
+        label nCell = mesh.nCells();
+        for(label i = 0; i < env::REGION_DECOMPOSE_NBLOCKS; ++i){
+            regionPtr[i] = nCell * i / env::REGION_DECOMPOSE_NBLOCKS;
+        }
+        regionPtr[env::REGION_DECOMPOSE_NBLOCKS] = nCell;
+        Info << "RegionID : regionStart, regionSize" << endl;
+        for(label regionI = 0; regionI < regionPtr.size() - 1; ++regionI){
+            Info << regionI << " : " << regionPtr[regionI] << ", " << regionPtr[regionI+1] - regionPtr[regionI] << endl;
+        }
+        BlockPattern blockPattern(pattern_after, regionPtr);
     }
-    // if(nBlocks == 1){
-    //     regionPtr.resize(17);
-    //     // partition nCells into 16 regions
-    //     for(label i = 0; i < 16; ++i){
-    //         label regionStart = nCell * i / label(16);
-    //         regionPtr[i] = regionStart;
-    //     }
-    //     regionPtr[16] = nCell;
-    //     BlockPattern blockPattern(pattern_after, regionPtr);
-    // }
 
     double block_pattern_time = initClock.timeIncrement();
     Info << "block_pattern_time = " << block_pattern_time << " s" << endl;
@@ -283,7 +297,16 @@ int main(int argc, char *argv[])
     double buildMeshSchedule_time = initClock.timeIncrement();
     Info << "buildMeshSchedule_time = " << buildMeshSchedule_time << " s" << endl;
 
-    dfMatrix matrix(mesh, regionPtr);
+    std::unique_ptr<dfMatrix> matrixPtr;
+
+    if(env::REGION_DECOMPOSE_NBLOCKS == 1){
+        matrixPtr = std::make_unique<dfMatrix>(mesh);
+    }else if(env::REGION_DECOMPOSE_NBLOCKS > 1){
+        matrixPtr = std::make_unique<dfMatrix>(mesh, regionPtr);
+    }else{
+        Info << "Error: env::REGION_DECOMPOSE_NBLOCKS should be greater than 0" << endl;
+        exit(1);
+    }
 
     // print all init time:
     double total_init_time = initClock.elapsedTime();

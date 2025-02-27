@@ -70,10 +70,6 @@ Foam::dfMatrix::dfMatrix(const lduMatrix& ldu): lduMatrixPtr_(&ldu)
             Info << "Building CSR matrix" << endl;
             innerMatrixPtr_ = std::make_shared<dfCSRMatrix>(ldu);
             break;
-        case InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_BLOCK_CSR:
-            Info << "Building CSR matrix" << endl;
-            innerMatrixPtr_ = std::make_shared<dfBlockMatrix>(ldu);
-            break;
         default:
             assert(false);
             break;
@@ -102,29 +98,6 @@ Foam::dfMatrix::dfMatrix(const lduMatrix& ldu, const labelList& regionPtr): lduM
     }
 }
 
-// Foam::dfMatrix::dfMatrix(const lduMatrix& courseLduMatrix, const labelList& fineRowBlockPtr, const labelList& fineToCoarse): lduMatrixPtr_(&courseLduMatrix)
-// {
-//     InnerMatrixFormat format = getInnerMatrixTypeFromEnv();
-//     switch(format){
-//         case InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_LDU:
-//             Info << "Building LDU matrix" << endl;
-//             innerMatrixPtr_ = std::make_shared<dfLduMatrix>(courseLduMatrix);
-//             break;
-//         case InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_CSR:
-//             Info << "Building CSR matrix" << endl;
-//             innerMatrixPtr_ = std::make_shared<dfCSRMatrix>(courseLduMatrix);
-//             break;
-//         case InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_BLOCK_CSR:
-//             Info << "Building Block CSR matrix" << endl;
-//             innerMatrixPtr_ = std::make_shared<dfBlockMatrix>(courseLduMatrix, fineRowBlockPtr, fineToCoarse);
-//             break;
-//         default:
-//             // error:
-//             SeriousError << "Invalid InnerMatrixFormat: " << format << endl << flush;
-//             std::exit(1);
-//     }
-// }
-
 Foam::dfMatrix::dfMatrix(const lduMesh& mesh): lduMatrixPtr_(nullptr)
 {
     InnerMatrixFormat format = getInnerMatrixTypeFromEnv();
@@ -136,10 +109,6 @@ Foam::dfMatrix::dfMatrix(const lduMesh& mesh): lduMatrixPtr_(nullptr)
         case InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_CSR:
             Info << "Building CSR matrix" << endl;
             innerMatrixPtr_ = std::make_shared<dfCSRMatrix>(mesh);
-            break;
-        case InnerMatrixFormat::DFMATRIX_INNERMATRIX_FORMAT_BLOCK_CSR:
-            Info << "Building CSR matrix" << endl;
-            innerMatrixPtr_ = std::make_shared<dfBlockMatrix>(mesh);
             break;
         default:
             assert(false);
