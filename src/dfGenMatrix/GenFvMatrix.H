@@ -16,6 +16,8 @@
 #include "processorFvPatchField.H"
 #include "schedule.H"
 
+// #define OPT_FACE2CELL_COLORING_SCHEDULE
+
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 namespace Foam

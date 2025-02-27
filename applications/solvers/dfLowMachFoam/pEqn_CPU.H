@@ -12,9 +12,70 @@ if (!pimple.simpleRho())
 // pressure solution
 const volScalarField psip0(psi*p);
 
-volScalarField rAU(1.0/UEqn.A());
-surfaceScalarField rhorAUf("rhorAUf", fvc::interpolate(rho*rAU));
-volVectorField HbyA(constrainHbyA(rAU*UEqn.H(), U, p));
+surfaceScalarField rhorAUf
+(
+    IOobject
+    (
+        "rhorAUf",
+        runTime.timeName(),
+        mesh,
+        IOobject::NO_READ,
+        IOobject::NO_WRITE
+    ),
+    mesh,
+    dimensionedScalar(dimensionSet(0,0,1,0,0,0,0), 0)
+);
+
+volVectorField HbyA
+(
+    IOobject
+    (
+        "HbyA",
+        runTime.timeName(),
+        mesh,
+        IOobject::NO_READ,
+        IOobject::NO_WRITE
+    ),
+    mesh,
+    dimensionedVector(dimensionSet(0,1,-1,0,0,0,0), Zero)
+);
+
+volScalarField rAU
+(
+    IOobject
+    (
+        "rAU",
+        runTime.timeName(),
+        mesh,
+        IOobject::NO_READ,
+        IOobject::NO_WRITE
+    ),
+    mesh,
+    dimensionedScalar(dimensionSet(-1,3,1,0,0,0,0), 0)
+);
+
+#ifndef OPT_GenMatrix_p
+rAU = (1.0/UEqn.A());
+rhorAUf = fvc::interpolate(rho*rAU);
+HbyA = constrainHbyA(rAU*UEqn.H(), U, p);
+#else
+getrAUandHbyA(rAU, HbyA, UEqn, U);
+#endif
+
+time_monitor_pEqn_pre += pEqnClock.timeIncrement();
+
+#ifdef OPT_GenMatrix_p_check
+tmp<volScalarField> trAUref = 1.0/UEqn.A();
+volScalarField& rAUref = trAUref.ref();
+tmp<volVectorField> tHbyAref = constrainHbyA(rAUref*UEqn.H(), U, p);
+volVectorField& HbyAref = tHbyAref.ref();
+tmp<surfaceScalarField> trhorAUfref = fvc::interpolate(rho*rAUref);
+surfaceScalarField& rhorAUfref = trhorAUfref.ref();
+check_field_boundary_equal(rAUref, rAU, "rAU");
+check_field_boundary_equal(HbyAref, HbyA, "HbyA");
+#endif
+
+time_monitor_pEqn_pre_check += pEqnClock.timeIncrement();
 
 if (pimple.nCorrPiso() <= 1)
 {
@@ -30,29 +91,41 @@ surfaceScalarField phiHbyA
 
 fvc::makeRelative(phiHbyA, rho, U);
 
-int flag_mpi_init;
-MPI_Initialized(&flag_mpi_init);
-if(flag_mpi_init) MPI_Barrier(PstreamGlobals::MPI_COMM_FOAM);
-
 // Update the pressure BCs to ensure flux consistency
 constrainPressure(p, rho, U, phiHbyA, rhorAUf);
-
-fvScalarMatrix pDDtEqn
-(
-    fvc::ddt(rho) + 
-    psi*correction(fvm::ddt(p))
-    + fvc::div(phiHbyA)
-);
 
 time_monitor_pEqn_pre += pEqnClock.timeIncrement();
 
 while (pimple.correctNonOrthogonal())
 {
-    fvScalarMatrix pEqn(pDDtEqn - fvm::laplacian(rhorAUf, p));
+    #ifndef OPT_GenMatrix_p
+    fvScalarMatrix pEqn
+    (
+        fvc::ddt(rho) + 
+        psi*correction(fvm::ddt(p))
+        + fvc::div(phiHbyA)
+        - fvm::laplacian(rhorAUf, p)
+    );
+    #else
+        tmp<fvScalarMatrix> tpEqn = GenMatrix_p(rho, p, phi, rAU, U, HbyA, psi, rhorAUf, phiHbyA);
+        fvScalarMatrix pEqn = tpEqn.ref();
+    #endif
 
     time_monitor_pEqn_pre += pEqnClock.timeIncrement();
-    
-#ifdef USE_DF_MATRIX
+
+    #ifdef OPT_GenMatrix_p_check
+    fvScalarMatrix pEqn_answer
+    (
+        fvc::ddt(rho) + psi * correction(fvm::ddt(p))
+      + fvc::div(phiHbyA)
+      - fvm::laplacian(rhorAUfref, p)
+    );
+    check_fvmatrix_equal(pEqn, pEqn_answer, "pEqn");
+    #endif
+
+    time_monitor_pEqn_pre_check += pEqnClock.timeIncrement();
+
+    #ifdef USE_DF_MATRIX
     // dfMatrix df_pEqn(pEqn, regionPtr);
     auto& psi = const_cast<volScalarField&>(pEqn.psi());
     auto& source = pEqn.source();
@@ -62,23 +135,26 @@ while (pimple.correctNonOrthogonal())
     matrix.valueCopy(pEqn);
 
     time_monitor_pEqn_convert += pEqnClock.timeIncrement();
-    
+
     // df_pEqn.solve(psi, source, internalCoeffs, boundaryCoeffs);
     matrix.solve(psi, source, internalCoeffs, boundaryCoeffs);
-#else
+    #else
     pEqn.solve();
-#endif
+    #endif
 
     time_monitor_pEqn_solve += pEqnClock.timeIncrement(); 
-    
+
+    #ifndef OPT_GenMatrix_p
     if (pimple.finalNonOrthogonalIter())
     {
         phi = phiHbyA + pEqn.flux();
     }
+    #else
+        postProcess_P(p, pEqn, phi, U, rAU, HbyA, K, dpdt, phiHbyA);
+    #endif
 
     time_monitor_pEqn_post += pEqnClock.timeIncrement();
 }
-
 
 bool limitedp = pressureControl.limit(p);
 

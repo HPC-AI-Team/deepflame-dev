@@ -5,7 +5,34 @@ syncClockTime YEqnClock;
 hDiffCorrFlux = Zero;
 diffAlphaD = Zero;
 sumYDiffError = Zero;
+surfaceScalarField phiUc
+(
+    IOobject
+    (
+        "phiUc",
+        runTime.timeName(),
+        mesh,
+        IOobject::NO_READ,
+        IOobject::NO_WRITE
+    ),
+    mesh,
+    dimensionedScalar(dimensionSet(1,0,-1,0,0,0,0), 0)
+);
+surfaceScalarField upwindWeights
+(
+    IOobject
+    (
+        "upwindWeights",
+        runTime.timeName(),
+        mesh,
+        IOobject::NO_READ,
+        IOobject::NO_WRITE
+    ),
+    mesh,
+    dimensionedScalar(dimensionSet(0,0,0,0,0,0,0), 0)
+);
 
+#ifndef OPT_GenMatrix_Y
 tmp<fv::convectionScheme<scalar>> mvConvection
 (
     fv::convectionScheme<scalar>::New
@@ -16,22 +43,42 @@ tmp<fv::convectionScheme<scalar>> mvConvection
         mesh.divScheme("div(phi,Yi_h)")
     )
 );
+#endif
 
 time_monitor_YEqn_pre += YEqnClock.timeIncrement();
 
-// auto& mgcs = dynamic_cast<fv::multivariateGaussConvectionScheme<scalar>&>(mvConvection.ref());
-// tmp<surfaceInterpolationScheme<scalar>> tinterpScheme_ = mgcs.interpolationScheme()()(Y[0]);
-// tmp<surfaceScalarField> tweights = tinterpScheme_().weights(Y[0]);
-// const surfaceScalarField& weights = tweights();
-// Info << "CPU weights\n" << weights << endl;
 {
+    #ifdef OPT_GenMatrix_Y
+    preProcess_Y(Y, phiUc, sumYDiffError, chemistry, upwindWeights, thermo.alpha(), phi);
+    #else
     forAll(Y, i)
     {
-        sumYDiffError += chemistry->rhoD(i)*fvc::grad(Y[i]);
+        sumYDiffError += chemistry->rhoD(i) * fvc::grad(Y[i]);;
     }
+    phiUc = (linearInterpolate(sumYDiffError) & mesh.Sf()).ref();
+    #endif
+
+    // forAll(Y, i)
+    // {
+    //     sumYDiffError += chemistry->rhoD(i)*fvc::grad(Y[i]);
+    // }
     // Info << "sumYDiffError\n" << sumYDiffError << endl;
-    const surfaceScalarField phiUc = (linearInterpolate(sumYDiffError) & mesh.Sf()).ref();
+    // const surfaceScalarField phiUc = (linearInterpolate(sumYDiffError) & mesh.Sf()).ref();
     time_monitor_YEqn_pre += YEqnClock.timeIncrement();
+
+    #ifdef OPT_GenMatrix_Y_check
+    volVectorField sumYDiffErrorRef = sumYDiffError;
+    sumYDiffErrorRef = Zero;
+    forAll(Y, i)
+    {
+        sumYDiffErrorRef += chemistry->rhoD(i) * fvc::grad(Y[i]);;
+    }
+    check_field_boundary_equal(sumYDiffErrorRef, sumYDiffError, "sumYDiffError");
+    const surfaceScalarField phiUcRef = (linearInterpolate(sumYDiffErrorRef) & mesh.Sf()).ref();
+    check_field_boundary_equal(phiUcRef, phiUc, "phiUc");
+    #endif
+
+    time_monitor_YEqn_pre_check += YEqnClock.timeIncrement();
 
     if (!splitting)
     {
@@ -51,6 +98,7 @@ time_monitor_YEqn_pre += YEqnClock.timeIncrement();
 
         if (i != inertIndex)
         {
+            #ifndef OPT_GenMatrix_Y
             tmp<volScalarField> DEff = chemistry->rhoD(i) + turbulence->mut()/Sct;
             fvScalarMatrix YiEqn
             (
@@ -68,9 +116,43 @@ time_monitor_YEqn_pre += YEqnClock.timeIncrement();
                     :  (fvm::laplacian(DEff(), Yi) + combustion->R(Yi))
                     )
             );
+            #else
+            tmp<fvScalarMatrix> tYiEqn = GenMatrix_Y(rho, Yi, phi, phiUc, chemistry->rhoD(i), turbulence->mut(), splitting, Sct, combustion(), upwindWeights);
+            fvScalarMatrix& YiEqn = tYiEqn.ref();
+            #endif
 
             time_monitor_YEqn_pre += YEqnClock.timeIncrement();
             // YiEqn.relax();
+
+
+            #ifdef OPT_GenMatrix_Y_check
+                tmp<fv::convectionScheme<scalar>> mvConvection
+                (
+                    fv::convectionScheme<scalar>::New
+                    (
+                        mesh,
+                        fields,
+                        phi,
+                        mesh.divScheme("div(phi,Yi_h)")
+                    )
+                );
+                tmp<volScalarField> DEff = chemistry->rhoD(i);
+                fvScalarMatrix YiEqn_answer
+                (
+                    fvm::ddt(rho, Yi)
+                    + mvConvection->fvmDiv(phi, Yi)
+                    + mvConvection->fvmDiv(phiUc, Yi)
+                    ==
+                    (
+                        splitting
+                    ?   fvm::laplacian(DEff(), Yi)
+                    :  (fvm::laplacian(DEff(), Yi) + combustion->R(Yi))
+                    )
+                );
+                check_fvmatrix_equal(YiEqn_answer, YiEqn, "YiEqn");
+            #endif
+
+            time_monitor_YEqn_pre_check += YEqnClock.timeIncrement();
 
 #ifdef USE_DF_MATRIX
             // dfMatrix df_YiEqn(YiEqn, regionPtr);
