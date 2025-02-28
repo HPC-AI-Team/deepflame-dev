@@ -2,21 +2,22 @@
 
 #include "dfBlockSubMatrix.H"
 #include <memory>
-
+#include <vector>
+#include <tuple>
 
 namespace Foam{
 
 class dfDIASubMatrix : public dfBlockSubMatrix{
 private:
 
-    std::unique_ptr<label> rowPtr_;
-    std::unique_ptr<label> colIdx_;
-    std::unique_ptr<scalar> values_;
-    std::unique_ptr<label> value_ldu_idx_;
+    label distance_count_;
+    std::unique_ptr<label[]> distance_list_;
+    std::unique_ptr<scalar[]> values_;
+    std::unique_ptr<label[]> value_ldu_idx_;
 
 public:
-    dfDIASubMatrix(label nRows, label nCols, label* rowPtr, label* colIdx, scalar* values):dfBlockSubMatrix(nRows, nCols),rowPtr_(rowPtr),colIdx_(colIdx),values_(values),value_ldu_idx_(nullptr){}
-    dfDIASubMatrix(label nRows, label nCols, label* rowPtr, label* colIdx, scalar* values, label* value_ldu_idx):dfBlockSubMatrix(nRows, nCols),rowPtr_(rowPtr),colIdx_(colIdx),values_(values),value_ldu_idx_(value_ldu_idx){}
+    dfDIASubMatrix(label nRows, label nCols, const std::vector<std::tuple<label,label,scalar>>& rcvList);
+    dfDIASubMatrix(label nRows, label nCols, const std::vector<std::tuple<label,label,label>>& rciList);
     ~dfDIASubMatrix(){}
 
     void valueCopyOffDiagBlock(const scalar* const __restrict__ lduValuePtr);

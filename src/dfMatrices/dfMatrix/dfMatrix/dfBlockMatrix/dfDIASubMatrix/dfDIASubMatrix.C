@@ -1,114 +1,114 @@
 #include "dfDIASubMatrix.H"
 #include <cassert>
+
 namespace Foam{
 
-void dfDIASubMatrix::valueCopyOffDiagBlock(const scalar* const __restrict__ lduValuePt){
-    // Info << "Enter dfDIASubMatrix::valueCopyOffDiagBlock(const scalar* const __restrict__ lduValuePt)" << endl << flush;
-    const label* const __restrict__ rowPtr = rowPtr_.get();
-    const label* const __restrict__ value_ldu_idx_ptr_= value_ldu_idx_.get();
-    scalar* const __restrict__ valuePtr = values_.get();
-
-    for(label r = 0; r < nRows_; ++r){
-        for(label idx = rowPtr[r]; idx < rowPtr[r+1]; ++idx){
-            valuePtr[idx] = lduValuePt[value_ldu_idx_ptr_[idx]];
+dfDIASubMatrix::dfDIASubMatrix(label nRows, label nCols, const std::vector<std::tuple<label,label,scalar>>& rcvList):dfBlockSubMatrix(nRows, nCols){
+    // count distance
+    std::vector<label> distance_map(2 * row_ - 1, 0);
+    for(const auto& entry: rcvList){
+        label r = std::get<0>(entry);
+        label c = std::get<1>(entry);
+        distance_map[r - c + row_ - 1] += 1;
+    }
+    // distance_count_
+    distance_count_ = 0;
+    for(label i = 0; i < 2 * row_ - 1; ++i){
+        if(distance_map[i] > 0){
+            distance_count_ += 1;
         }
     }
-    // Info << "Exit dfDIASubMatrix::valueCopyOffDiagBlock(const scalar* const __restrict__ lduValuePt)" << endl << flush;
-}
-
-void dfDIASubMatrix::valueCopyDiagBlock(const scalar* const __restrict__ lower, const scalar* const __restrict__ upper){
-    // Info << "Enter dfDIASubMatrix::valueCopyDiagBlock(const scalar* const __restrict__ lower, const scalar* const __restrict__ upper)" << endl << flush;
-    const label* const __restrict__ rowPtr = rowPtr_.get();
-    const label* const __restrict__ colIdxPtr = colIdx_.get();
-    const label* const __restrict__ value_ldu_idx_ptr_= value_ldu_idx_.get();
-    scalar* const __restrict__ valuePtr = values_.get();
-
-    for(label r = 0; r < nRows_; ++r){
-        for(label idx = rowPtr[r]; idx < rowPtr[r+1]; ++idx){
-            label c = colIdxPtr[idx];
-            if(r > c){
-                valuePtr[idx] = lower[value_ldu_idx_ptr_[idx]];
-            }else if(r < c){
-                valuePtr[idx] = upper[value_ldu_idx_ptr_[idx]];
-            }else{
-                assert(false);
-            }
+    // fill distance_list_
+    distance_list_ = std::make_unique<label[]>(distance_count_);
+    label idx = 0;
+    for(label i = 0; i < 2 * row_ - 1; ++i){
+        if(distance_map[i] > 0){
+            distance_list_[idx] = i - row_ + 1;
+            distance_map[i] = idx;
+            idx += 1;
+        }else{
+            distance_map[i] = -1;
         }
     }
-    // Info << "Exit dfDIASubMatrix::valueCopyDiagBlock(const scalar* const __restrict__ lower, const scalar* const __restrict__ upper)" << endl << flush;
+
+    // fill off_diag_value
+    values_ = std::make_unique<scalar[]>(distance_count_ * row_);
+
+    for(label i = 0; i < distance_count_ * row_; ++i){
+        values_[i] = 0.0;
+    }
+
+    for(const auto& entry: rcvList){
+        label r = std::get<0>(entry);
+        label c = std::get<1>(entry);
+        scalar value = std::get<2>(entry);
+        label distance = r - c;
+        label dia_col = distance_map[distance + row_ - 1];
+        label index = dia_col * row_ + r;
+        values_[index] = value;
+    }
+
+    value_ldu_idx_ = nullptr;
 }
 
-void dfDIASubMatrix::SpMV(scalar* const __restrict__ ApsiPtr_offset, const scalar* const __restrict__ psiPtr_offset) const {
-    const label* const __restrict__ rowPtr = rowPtr_.get();
-    const label* const __restrict__ colIdxPtr = colIdx_.get();
-    const scalar* const __restrict__ valuePtr = values_.get();
-
-    for(label r = 0; r < nRows_; ++r){
-        scalar sum = 0.;
-        for(label idx = rowPtr[r]; idx < rowPtr[r+1]; ++idx){
-            sum += valuePtr[idx] * psiPtr_offset[colIdxPtr[idx]];
+dfDIASubMatrix::dfDIASubMatrix(label nRows, label nCols, const std::vector<std::tuple<label,label,label>>& rciList):dfBlockSubMatrix(nRows, nCols){
+    // count distance
+    std::vector<label> distance_map(2 * row_ - 1, 0);
+    for(const auto& entry: rciList){
+        label r = std::get<0>(entry);
+        label c = std::get<1>(entry);
+        distance_map[r - c + row_ - 1] += 1;
+    }
+    // distance_count_
+    distance_count_ = 0;
+    for(label i = 0; i < 2 * row_ - 1; ++i){
+        if(distance_map[i] > 0){
+            distance_count_ += 1;
         }
-        ApsiPtr_offset[r] += sum;
+    }
+    // fill distance_list_
+    distance_list_ = std::make_unique<label[]>(distance_count_);
+    label idx = 0;
+    for(label i = 0; i < 2 * row_ - 1; ++i){
+        if(distance_map[i] > 0){
+            distance_list_[idx] = i - row_ + 1;
+            distance_map[i] = idx;
+            idx += 1;
+        }else{
+            distance_map[i] = -1;
+        }
+    }
+
+    // fill off_diag_value
+    values_ = std::make_unique<scalar[]>(distance_count_ * row_);
+    value_ldu_idx_ = std::make_unique<label[]>(distance_count_ * row_);
+
+    for(label i = 0; i < distance_count_ * row_; ++i){
+        values_[i] = 0.0;
+        value_ldu_idx_[i] = -1;
+    }
+
+    for(const auto& entry: rcvList){
+        label r = std::get<0>(entry);
+        label c = std::get<1>(entry);
+        label faceIndex = std::get<2>(entry);
+        label distance = r - c;
+        label dia_col = distance_map[distance + row_ - 1];
+        label index = dia_col * row_ + r;
+        value_ldu_idx_[index] = faceIndex;
     }
 }
 
-void dfDIASubMatrix::SumA(scalar* const __restrict__ sumAPtr_offset) const {
-    const label* const __restrict__ rowPtr = rowPtr_.get();
-    const scalar* const __restrict__ valuePtr = values_.get();
+void dfDIASubMatrix::valueCopyOffDiagBlock(const scalar* const __restrict__ lduValuePt){}
 
-    for(label r = 0; r < nRows_; ++r){
-        scalar sum = 0.;
-        for(label idx = rowPtr[r]; idx < rowPtr[r+1]; ++idx){
-            sum += valuePtr[idx];
-        }
-        sumAPtr_offset[r] += sum;
-    }
-}
+void dfDIASubMatrix::valueCopyDiagBlock(const scalar* const __restrict__ lower, const scalar* const __restrict__ upper){}
 
+void dfDIASubMatrix::SpMV(scalar* const __restrict__ ApsiPtr_offset, const scalar* const __restrict__ psiPtr_offset) const {}
 
-void dfDIASubMatrix::BsubApsi(scalar* const __restrict__ BPtr_offset, const scalar* const __restrict__ psiPtr_offset) const {
-    // Info << "Enter dfDIASubMatrix::BsubApsi(scalar* const __restrict__ BPtr_offset, const scalar* const __restrict__ psiPtr_offset)" << endl << flush; 
-    const label* const __restrict__ rowPtr = rowPtr_.get();
-    const label* const __restrict__ colIdxPtr = colIdx_.get();
-    const scalar* const __restrict__ valuePtr = values_.get();
-    for(label r = 0; r < nRows_; ++r){
-        scalar sum = 0.0;
-        for(label idx = rowPtr[r]; idx < rowPtr[r+1]; ++idx){
-            sum += valuePtr[idx] * psiPtr_offset[colIdxPtr[idx]];
-        }
-        BPtr_offset[r] -= sum;
-    }
-    // Info << "Exit dfDIASubMatrix::BsubApsi(scalar* const __restrict__ BPtr_offset, const scalar* const __restrict__ psiPtr_offset)" << endl << flush; 
-}
+void dfDIASubMatrix::SumA(scalar* const __restrict__ sumAPtr_offset) const {}
 
-void dfDIASubMatrix::GaussSeidel(scalar* const __restrict__ psiPtr_offset, const scalar* const __restrict__ BPtr_offset, const scalar* const __restrict__ diagPtr_offset) const {
-    // Info << "Enter dfDIASubMatrix::GaussSeidel(scalar* const __restrict__ psiPtr_offset, const scalar* const __restrict__ BPtr_offset, const scalar* const __restrict__ diagPtr_offset)" << endl << flush;
-    const label* const __restrict__ rowPtr = rowPtr_.get();
-    const label* const __restrict__ colIdxPtr = colIdx_.get();
-    const scalar* const __restrict__ valuePtr = values_.get();
-    for(label r = 0; r < nRows_; ++r){
-        scalar sum = 0.0;
-        for(label idx = rowPtr[r]; idx < rowPtr[r+1]; ++idx){
-            sum += valuePtr[idx] * psiPtr_offset[colIdxPtr[idx]];
-        }
-        psiPtr_offset[r] = (BPtr_offset[r] - sum) / diagPtr_offset[r];
-    }
-    // Info << "Exit dfDIASubMatrix::GaussSeidel(scalar* const __restrict__ psiPtr_offset, const scalar* const __restrict__ BPtr_offset, const scalar* const __restrict__ diagPtr_offset)" << endl << flush;
-}
+void dfDIASubMatrix::BsubApsi(scalar* const __restrict__ BPtr_offset, const scalar* const __restrict__ psiPtr_offset) const {}
 
-// void dfDIASubMatrix::Jacobi(scalar* const __restrict__ psiPtr_offset, const scalar* const __restrict__ psiOldPtr_offset, const scalar* const __restrict__ BPtr_offset, const scalar* const __restrict__ diagPtr_offset) const {
-//     Info << "Enter dfDIASubMatrix::Jacobi(scalar* const __restrict__ psiPtr_offset, const scalar* const __restrict__ psiOldPtr_offset, const scalar* const __restrict__ BPtr_offset, const scalar* const __restrict__ diagPtr_offset)" << endl << flush;
-//     const label* const __restrict__ rowPtr = rowPtr_.get();
-//     const label* const __restrict__ colIdxPtr = colIdx_.get();
-//     const scalar* const __restrict__ valuePtr = values_.get();
-//     for(label r = 0; r < nRows_; ++r){
-//         scalar sum = 0.0;
-//         for(label idx = rowPtr[r]; idx < rowPtr[r+1]; ++idx){
-//             sum += valuePtr[idx] * psiOldPtr_offset[colIdx_[idx]];
-//         }
-//         psiPtr_offset[r] = (BPtr_offset[r] - sum) / diagPtr_offset[r];
-//     }
-//     Info << "Exit dfDIASubMatrix::Jacobi(scalar* const __restrict__ psiPtr_offset, const scalar* const __restrict__ psiOldPtr_offset, const scalar* const __restrict__ BPtr_offset, const scalar* const __restrict__ diagPtr_offset)" << endl << flush;
-// }
+void dfDIASubMatrix::GaussSeidel(scalar* const __restrict__ psiPtr_offset, const scalar* const __restrict__ BPtr_offset, const scalar* const __restrict__ diagPtr_offset) const {}
 
 }
