@@ -3,6 +3,7 @@
 #include <mpi.h>
 #include "dfCSRSubMatrix.H"
 #include "env.H"
+#include "dfThread.H"
 #include <omp.h>
 
 namespace Foam{
@@ -352,10 +353,47 @@ void dfBlockMatrix::GaussSeidel(scalar* const __restrict__ psiPtr, scalar* const
     // Pout << "Enter dfBlockMatrix::GaussSeidel(scalar* const __restrict__ psiPtr, scalar* const __restrict__ bPrimePtr)" << endl << flush;
     const scalar* const __restrict__ diagPtr = diag().begin();
 
+// #ifdef __sw_64__
+
+//     {
+//         for(label rbid = 0; rbid < rowBlockCount_; ++rbid){
+//             label rowOffset = rowBlockPtr_[rbid];
+//             label rowLen = rowBlockPtr_[rbid+1] - rowBlockPtr_[rbid];
+//             scalar* const __restrict__ bPrimePtr_offset = bPrimePtr + rowOffset;
+//             const scalar* const __restrict__ diagPtr_offset = diagPtr + rowOffset;
+
+//             // B = b - (L + U) * x
+//             for(label cbid = 0; cbid < rowBlockCount_; ++cbid){
+//                 label bid = bid2d(rbid, cbid);
+//                 if(rbid == cbid)
+//                     continue;
+//                 if(blocks_[bid] == nullptr)
+//                     continue;
+//                 label colOffset = rowBlockPtr_[cbid];
+//                 const dfBlockSubMatrix& offDiagBlock = *blocks_[bid];
+//                 offDiagBlock.BsubApsi(bPrimePtr_offset, psiPtr + colOffset);
+//             }
+
+//             label diagBlockIndex = bid2d(rbid, rbid);
+//             scalar* const __restrict__ psiPtr_offset = psiPtr + rowOffset;
+//             if(blocks_[diagBlockIndex] == nullptr){
+//                 //  x = B / diag
+//                 for(label r = 0; r < rowLen; ++r){
+//                     psiPtr_offset[r] = bPrimePtr_offset[r] / diagPtr_offset[r];
+//                 }
+//             }else{
+//                 const dfBlockSubMatrix& diagBlock = *blocks_[diagBlockIndex];
+//                 diagBlock.GaussSeidel(psiPtr_offset, bPrimePtr_offset, diagPtr_offset);
+//             }
+//         }
+//     }
+
+// #else
+
     #pragma omp parallel
     {
-        int thread_rank = omp_get_thread_num();
-        int thread_size = omp_get_num_threads();
+        int thread_rank = df_thread_rank();
+        int thread_size = df_thread_size();
         label rb_start = rowBlockCount_ * thread_rank / thread_size;
         label rb_end = rowBlockCount_ * (thread_rank + 1) / thread_size;
 
@@ -399,36 +437,9 @@ void dfBlockMatrix::GaussSeidel(scalar* const __restrict__ psiPtr, scalar* const
             }
         }
     }
-    // for(label rbid = 0; rbid < rowBlockCount_; ++rbid){
-    //     label rowOffset = rowBlockPtr_[rbid];
-    //     label rowLen = rowBlockPtr_[rbid+1] - rowBlockPtr_[rbid];
-    //     scalar* const __restrict__ bPrimePtr_offset = bPrimePtr + rowOffset;
-    //     const scalar* const __restrict__ diagPtr_offset = diagPtr + rowOffset;
 
-    //     // B = b - (L + U) * x
-    //     for(label cbid = 0; cbid < rowBlockCount_; ++cbid){
-    //         label bid = bid2d(rbid, cbid);
-    //         if(rbid == cbid)
-    //             continue;
-    //         if(blocks_[bid] == nullptr)
-    //             continue;
-    //         label colOffset = rowBlockPtr_[cbid];
-    //         const dfBlockSubMatrix& offDiagBlock = *blocks_[bid];
-    //         offDiagBlock.BsubApsi(bPrimePtr_offset, psiPtr + colOffset);
-    //     }
+// #endif
 
-    //     label diagBlockIndex = bid2d(rbid, rbid);
-    //     scalar* const __restrict__ psiPtr_offset = psiPtr + rowOffset;
-    //     if(blocks_[diagBlockIndex] == nullptr){
-    //         //  x = B / diag
-    //         for(label r = 0; r < rowLen; ++r){
-    //             psiPtr_offset[r] = bPrimePtr_offset[r] / diagPtr_offset[r];
-    //         }
-    //     }else{
-    //         const dfBlockSubMatrix& diagBlock = *blocks_[diagBlockIndex];
-    //         diagBlock.GaussSeidel(psiPtr_offset, bPrimePtr_offset, diagPtr_offset);
-    //     }
-    // }
     // Pout << "Exit dfBlockMatrix::GaussSeidel(scalar* const __restrict__ psiPtr, scalar* const __restrict__ bPrimePtr)" << endl << flush;
 }
 

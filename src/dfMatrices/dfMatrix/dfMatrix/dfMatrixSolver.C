@@ -44,6 +44,22 @@ Foam::autoPtr<Foam::dfMatrix::solver> Foam::dfMatrix::solver::New
     }
     else if (matrix.symmetric())
     {
+        if(name == "PCG"){
+            return autoPtr<dfMatrix::solver>
+            (
+                new dfPCG
+                (
+                    fieldName,
+                    matrix,
+                    interfaceBouCoeffs,
+                    interfaceIntCoeffs,
+                    interfaces,
+                    solverControls
+                )
+            );
+        }else{
+            Info << "Foam::dfMatrix::solver::New symmetric name : " << name << endl;
+        }
         symMatrixConstructorTable::iterator constructorIter =
             symMatrixConstructorTablePtr_->find(name);
 
@@ -84,6 +100,22 @@ Foam::autoPtr<Foam::dfMatrix::solver> Foam::dfMatrix::solver::New
     }
     else if (matrix.asymmetric())
     {
+        if(name == "PBiCGStab"){
+            return autoPtr<dfMatrix::solver>
+            (
+                new dfPBiCGStab
+                (
+                    fieldName,
+                    matrix,
+                    interfaceBouCoeffs,
+                    interfaceIntCoeffs,
+                    interfaces,
+                    solverControls
+                )
+            );
+        }else{
+            Info << "Foam::dfMatrix::solver::New asymmetric name : " << name << endl;
+        }
         asymMatrixConstructorTable::iterator constructorIter =
             asymMatrixConstructorTablePtr_->find(name);
 

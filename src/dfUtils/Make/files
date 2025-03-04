@@ -1,4 +1,4 @@
 env.C
-thread.C
+dfThread.C
 
 LIB = $(DF_LIBBIN)/libdfUtils

@@ -34,6 +34,7 @@ lnInclude
 linux*Clang*/
 linux*Gcc*/
 linux*Icc*/
+linux64SW*/
 solaris*Gcc*/
 SunOS*Gcc*/
 linuxArm64*/
