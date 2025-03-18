@@ -113,10 +113,10 @@ int offset;
 #include "clockTime.H"
 
 #define USE_DF_MATRIX
-#define OPT_GenMatrix_E
-#define OPT_GenMatrix_Y
-#define OPT_GenMatrix_U
-#define OPT_GenMatrix_p
+// #define OPT_GenMatrix_E
+// #define OPT_GenMatrix_Y
+// #define OPT_GenMatrix_U
+// #define OPT_GenMatrix_p
 // #define OPT_GenMatrix_Y_check
 // #define OPT_GenMatrix_E_check
 // #define OPT_GenMatrix_U_check
@@ -287,10 +287,9 @@ int main(int argc, char *argv[])
     double block_pattern_time = initClock.timeIncrement();
     Info << "block_pattern_time = " << block_pattern_time << " s" << endl;
 
+#if defined(OPT_GenMatrix_E) || defined(OPT_GenMatrix_Y) || defined(OPT_GenMatrix_U) || defined(OPT_GenMatrix_p)
     init_const_coeff_ptr(Y);
     MeshSchedule::buildMeshSchedule(mesh);
-
-#if defined(OPT_FACE2CELL_COLORING_SCHEDULE)
     XYBlock1DColoringStructuredMeshSchedule::buildXYBlock1DColoringStructuredMeshSchedule(mesh);
 #endif
 
