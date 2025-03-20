@@ -22,6 +22,7 @@ USE_LIBTORCH=false
 USE_PYTORCH=false
 USE_GPUSOLVER=false
 USE_ODE_GPU_SOLVER=false
+USE_BLASDNN=false
 
 while test $# -gt 0; do
     case "$1" in
@@ -55,6 +56,10 @@ while test $# -gt 0; do
             shift
             USE_PYTORCH=true
             shift
+            ;;
+        --use_blasdnn)
+            shift
+            USE_BLASDNN=true
             ;;
         --libcantera_dir)
             shift
@@ -169,6 +174,9 @@ fi
 if [ $USE_GPUSOLVER = true ]; then
     echo AMGX_DIR=$AMGX_DIR
 fi
+if [ ! -z "$USE_BLASDNN" ]; then
+    echo USE_BLASDNN=$USE_BLASDNN
+fi
 if [ $USE_ODE_GPU_SOLVER = true ]; then
     echo ODE_GPU_SOLVER=$OPENCC_PATH
 fi
@@ -179,6 +187,7 @@ sed -i "s#LIBTORCH_DIR#$LIBTORCH_DIR#g" ./bashrc
 sed -i "s#PYTORCH_INC#$PYTORCH_INC#g" ./bashrc
 sed -i "s#PYTORCH_LIB#$PYTORCH_LIB#g" ./bashrc
 sed -i "s#LIBCANTERA_DIR#$LIBCANTERA_DIR#g" ./bashrc
+sed -i "s#@USE_BLASDNN@#$USE_BLASDNN#g" ./bashrc
 sed -i "s#@AMGX_DIR@#$AMGX_DIR#g" ./bashrc
 sed -i "s#@ODE_GPU_SOLVER@#$OPENCC_PATH#g" ./bashrc
 

@@ -245,6 +245,10 @@ int main(int argc, char *argv[])
         Info << "max nCell : " << max_nCell << endl;
     }
 
+    // #include "intializeFields.H"
+    double intializeFields_time = initClock.timeIncrement();
+    Info << "IntializeFields time : " << intializeFields_time << endl; 
+
     // mesh renumbering
     csrPattern pattern_before(mesh);
     if(mpirank == 0 || mpirank == 1){
@@ -326,6 +330,7 @@ int main(int argc, char *argv[])
     Info << "turbulence_validate_time = " << turbulence_validate_time << " s " << turbulence_validate_time * 100. / total_init_time << "%" << endl;
     Info << "LTS_time = " << LTS_time << " s " << LTS_time * 100. / total_init_time << "%" << endl;
     Info << "proc_info_gather_time = " << proc_info_gather_time << " s " << proc_info_gather_time * 100. / total_init_time << "%" << endl;
+    Info << "IntializeFields_time : = " << intializeFields_time << " s " << intializeFields_time * 100. / total_init_time << "%" << endl;
     Info << "refine_time = " << refine_time << " s " << refine_time * 100. / total_init_time << "%" << endl;
     Info << "pattern_before_time = " << pattern_before_time << " s " << pattern_before_time * 100. / total_init_time << "%" << endl;
     Info << "renumber_time = " << renumber_time << " s " << renumber_time * 100. / total_init_time << "%" << endl;

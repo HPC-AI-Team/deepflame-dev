@@ -73,6 +73,11 @@ SourceFiles
 #include "OFstream.H"
 #include "IOmanip.H"
 #include "PstreamGlobals.H"
+// blasDNN
+#ifdef USE_BLASDNN
+#include "DNNInferencer_blas.H"
+#include "DNNThermo_blas.H"
+#endif
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 namespace Foam
@@ -134,8 +139,15 @@ public IOdictionary
         // DNN selection fields
         volScalarField selectDNN_;
         bool useThermoTranNN;
+        bool isFirst;
 
-#if defined USE_LIBTORCH || defined USE_PYTORCH
+#if defined(USE_BLASDNN)
+        std::vector<double> Xmu_, Xstd_, Ymu_, Ystd_,
+                            thermomu_, thermostd_;
+
+#endif
+
+#if defined USE_LIBTORCH || defined USE_PYTORCH || defined USE_BLASDNN
         bool useDNN;
         Switch torchSwitch_;
         Switch gpu_;
@@ -163,6 +175,29 @@ public IOdictionary
         word torchModelName1_;
         word torchModelName2_;
         word torchModelName3_;
+#endif
+
+#ifdef USE_BLASDNN
+
+// #define USE_BLASDNN_HALF
+#define USE_BLASDNN_FLOAT
+// #define USE_BLASDNN_DOUBLE
+
+#if defined(USE_BLASDNN_HALF)
+        DNNInferencer_blas<__fp16> DNNInferencer_blas_;
+        DNNThermo_blas<__fp16> DNNThermo_blas_;
+#elif defined(USE_BLASDNN_FLOAT)
+        DNNThermo_blas<float> DNNThermo_blas_;
+        DNNInferencer_blas<float> DNNInferencer_blas_;
+#elif defined(USE_BLASDNN_DOUBLE)
+        DNNInferencer_blas<double> DNNInferencer_blas_;
+        DNNThermo_blas<double> DNNThermo_blas_;
+#else
+#error "must define one of USE_BLASDNN_HALF, USE_BLASDNN_FLOAT or USE_BLASDNN_DOUBLE"
+#endif
+
+        string BLASDNNModelPath_;
+        string thermoDNNModelPath_;
 #endif
 
 #ifdef USE_PYTORCH
@@ -223,6 +258,14 @@ public IOdictionary
         //- Solve the reaction system with DLB algorithm
         template<class DeltaTType>
         scalar solve_CVODE(const DeltaTType& deltaT);
+
+#ifdef USE_BLASDNN
+        template<class DeltaTType>
+        scalar solve_DNN_blas(const DeltaTType& deltaT);
+        void thermoDNN_blas(volScalarField& he, const volScalarField& p, PtrList<volScalarField>& Y,
+                volScalarField& rho, volScalarField& T, volScalarField& psi, volScalarField& mu,
+                volScalarField& alpha, PtrList<volScalarField>& rhoD);
+#endif
 
         //- Output logFiles
         Foam::autoPtr<Foam::OFstream> logFile(const word& name) const

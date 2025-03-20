@@ -9,6 +9,7 @@ EXE_INC = -std=c++14 \
     $(PFLAGS) $(PINC) \
     $(if $(LIBTORCH_ROOT),-DUSE_LIBTORCH,) \
     $(if $(PYTHON_INC_DIR),-DUSE_PYTORCH,) \
+    $(if $(USE_BLASDNN),-DUSE_BLASDNN,) \
     -I$(LIB_SRC)/transportModels/compressible/lnInclude \
     -I$(LIB_SRC)/thermophysicalModels/basic/lnInclude \
     -I$(LIB_SRC)/TurbulenceModels/turbulenceModels/lnInclude \
@@ -43,11 +44,15 @@ EXE_INC = -std=c++14 \
     $(if $(AMGX_DIR), -I/usr/local/cuda/include,) \
     $(if $(AMGX_DIR), -I$(AMGX_DIR)/include,) \
     $(if $(ODE_GPU_SOLVER), -I$(OPENCC_PATH)/include,) \
-    $(if $(ODE_GPU_SOLVER), -DODE_GPU_SOLVER,)
+    $(if $(ODE_GPU_SOLVER), -DODE_GPU_SOLVER,) \
+    -I/vol0001/hp230257/guozhuoqiang/DeepFlame/software/yaml-cpp-0.7.0/include
 
 
 
 EXE_LIBS = \
+    -L$(DF_ROOT)/lib/ \
+    -lDNNInferencer_blas \
+    -lfjlapackexsve \
     -lcompressibleTransportModels \
     -lturbulenceModels \
     -lfiniteVolume \

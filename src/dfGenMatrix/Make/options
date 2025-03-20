@@ -1,8 +1,8 @@
 -include $(GENERAL_RULES)/mplibType
 
 EXE_INC = -std=c++17\
-	-g \
     $(PFLAGS) $(PINC) \
+    $(if $(USE_BLASDNN),-DUSE_BLASDNN,) \
     -I$(LIB_SRC)/transportModels/compressible/lnInclude \
     -I$(LIB_SRC)/thermophysicalModels/basic/lnInclude \
     -I$(LIB_SRC)/TurbulenceModels/turbulenceModels/lnInclude \
@@ -25,7 +25,8 @@ EXE_INC = -std=c++17\
     -I$(LIB_SRC)/surfMesh/lnInclude \
     -I$(LIB_SRC)/dynamicMesh/lnInclude \
     -I$(LIB_SRC)/finiteVolume/lnInclude \
-    -I$(CANTERA_ROOT)/include
+    -I$(CANTERA_ROOT)/include \
+    -I/root/NNopt/yaml-cpp-static/include
 
 
 EXE_LIBS = \
@@ -33,4 +34,5 @@ EXE_LIBS = \
     -ldfUtils \
     -lmeshTools \
     -ltriSurface \
-    -lOpenFOAM
+    -lOpenFOAM \
+    -L$(DF_ROOT)/lib/ \
