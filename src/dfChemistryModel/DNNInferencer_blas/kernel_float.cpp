@@ -116,7 +116,5 @@ void bias_gelu_lookup_fusion<float>(Tensor<float>& input, const Tensor<float>& b
 
 template<>
 void gemm<float>(char transa, char transb, int m, int n, int k, float alpha, const float *a, int lda, const float *b, int ldb, float beta, float *c, int ldc){
-    // sgemm_(&transa, &transb, &m, &n, &k, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
-    
-    cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans, m ,n ,k ,alpha, a, lda, b, ldb, beta, c, ldc);
+    sgemm_(&transa, &transb, &m, &n, &k, &alpha, a, &lda, b, &ldb, &beta, c, &ldc);
 }

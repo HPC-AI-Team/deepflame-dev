@@ -384,21 +384,27 @@ Foam::dfChemistryModel<ThermoType>::dfChemistryModel
             count[0] = norm_str.size();
             fin.close();
 
-            // thermo norm
-            fin = std::ifstream(thermoDNNModelPath_ + "/model/parameter/norm.yaml");
-            if (!fin) {
-                SeriousError << "open norm error , norm path : " << thermoDNNModelPath_ + "/model/parameter/norm.yaml" << endl;
-                MPI_Abort(PstreamGlobals::MPI_COMM_FOAM, -1);
+            if(useThermoTranNN)
+            {
+                // thermo norm
+                fin = std::ifstream(thermoDNNModelPath_ + "/model/parameter/norm.yaml");
+                if (!fin) {
+                    SeriousError << "open norm error , norm path : " << thermoDNNModelPath_ + "/model/parameter/norm.yaml" << endl;
+                    MPI_Abort(PstreamGlobals::MPI_COMM_FOAM, -1);
+                }
+                oss.str("");
+                oss << fin.rdbuf();
+                thermo_norm_str = oss.str();
+                count[1] = thermo_norm_str.size();
+                fin.close();
+            }else{
+                count[1] = 0;
             }
-            oss.str("");
-            oss << fin.rdbuf();
-            thermo_norm_str = oss.str();
-            count[1] = thermo_norm_str.size();
-            fin.close();
 
             buffer = new char[count[0] + count[1]];
             std::copy(norm_str.begin(), norm_str.end(), buffer);
             std::copy(thermo_norm_str.begin(), thermo_norm_str.end(), buffer + count[0]);
+
         }
 
         if(flag_mpi_init){
@@ -412,16 +418,19 @@ Foam::dfChemistryModel<ThermoType>::dfChemistryModel
             delete[] buffer;
         }
 
-        // thermo norm
-        YAML::Node thermoNorm = YAML::Load(thermo_norm_str);
-        YAML::Node thermoMuNode = thermoNorm["mean"];
+        if(useThermoTranNN)
+        {
+            // thermo norm
+            YAML::Node thermoNorm = YAML::Load(thermo_norm_str);
+            YAML::Node thermoMuNode = thermoNorm["mean"];
 
-        for (size_t i = 0; i < thermoMuNode.size(); i++){
-            thermomu_.push_back(thermoMuNode[i].as<double>());
-        }
-        YAML::Node thermoStdNode = thermoNorm["std"];
-        for (size_t i = 0; i < thermoStdNode.size(); i++){
-            thermostd_.push_back(thermoStdNode[i].as<double>());
+            for (size_t i = 0; i < thermoMuNode.size(); i++){
+                thermomu_.push_back(thermoMuNode[i].as<double>());
+            }
+            YAML::Node thermoStdNode = thermoNorm["std"];
+            for (size_t i = 0; i < thermoStdNode.size(); i++){
+                thermostd_.push_back(thermoStdNode[i].as<double>());
+            }
         }
 
         // chemistry norm

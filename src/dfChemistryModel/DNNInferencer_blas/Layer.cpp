@@ -33,8 +33,6 @@ void Linear<float>::load_parameters(const std::string& dir, int64_t layer_id){
     }
 
     if(mpirank == 0 || !flag_mpi_init){
-
-
         std::stringstream ss1,ss2;
         ss1 << dir << "/" << "Linear_" << layer_id << "_weights_rowmajor_" << in_features_ << "_" << out_features_ << ".bin";
         std::string weights_path = ss1.str();
@@ -69,9 +67,9 @@ void Linear<double>::load_parameters(const std::string& dir, int64_t layer_id){
 
     if(mpirank == 0 || !flag_mpi_init){
         std::stringstream ss1,ss2;
-        ss1 << dir << "/" << "linear_" << layer_id << "_weights_rowmajor_" << in_features_ << "_" << out_features_ << ".data";
+        ss1 << dir << "/" << "Linear_" << layer_id << "_weights_rowmajor_" << in_features_ << "_" << out_features_ << ".bin";
         std::string weights_path = ss1.str();
-        ss2 << dir << "/" << "linear_" << layer_id << "_bias_" << out_features_ << ".data";
+        ss2 << dir << "/" << "Linear_" << layer_id << "_bias_" << out_features_ << ".bin";
         std::string bias_path = ss2.str();
 
         float* weight_tmp = new float[weights_.element_num()];
@@ -113,9 +111,9 @@ void Linear<__fp16>::load_parameters(const std::string& dir, int64_t layer_id){
 
     if(mpirank == 0){
         std::stringstream ss1,ss2;
-        ss1 << dir << "/" << "linear_" << layer_id << "_weights_rowmajor_" << in_features_ << "_" << out_features_ << ".data";
+        ss1 << dir << "/" << "Linear_" << layer_id << "_weights_rowmajor_" << in_features_ << "_" << out_features_ << ".bin";
         std::string weights_path = ss1.str();
-        ss2 << dir << "/" << "linear_" << layer_id << "_bias_" << out_features_ << ".data";
+        ss2 << dir << "/" << "Linear_" << layer_id << "_bias_" << out_features_ << ".bin";
         std::string bias_path = ss2.str();
 
         float* weight_tmp = new float[weights_.element_num()];
@@ -179,7 +177,6 @@ void LinearGELU<DataType>::print_timer(){
 
 template<typename DataType>
 void Linear<DataType>::forward(const Tensor<DataType>& input, Tensor<DataType>& output){
-    // printf("Linear:forward\n");
     char transA = 'N';
     char transB = 'N';
     DataType alpha = 1.;
@@ -188,14 +185,11 @@ void Linear<DataType>::forward(const Tensor<DataType>& input, Tensor<DataType>& 
     int n = input.dim(0);
     int k = in_features_;
     DataType* A = weights_.data();
-    // int lda = out_features_;
-    int lda = k;
+    int lda = out_features_;
     DataType* B = const_cast<DataType*>(input.data());
-    // int ldb = input.dim(1);
-    int ldb = k;
+    int ldb = input.dim(1);
     DataType*  C = output.data();
-    // int ldc = output.dim(1);
-    int ldc = n;
+    int ldc = output.dim(1);
 
     double time0 = MPI_Wtime();
 
@@ -214,7 +208,6 @@ void Linear<DataType>::forward(const Tensor<DataType>& input, Tensor<DataType>& 
 
 template<typename DataType>
 void LinearGELU<DataType>::forward(const Tensor<DataType>& input, Tensor<DataType>& output){
-
     char transA = 'N';
     char transB = 'N';
     DataType alpha = 1.;
@@ -223,18 +216,15 @@ void LinearGELU<DataType>::forward(const Tensor<DataType>& input, Tensor<DataTyp
     int n = input.dim(0);
     int k = Linear<DataType>::in_features_;
     DataType* A = Linear<DataType>::weights_.data();
-    // int lda = Linear<DataType>::out_features_;
-    int lda = k;
+    int lda = Linear<DataType>::out_features_;
     DataType* B = const_cast<DataType*>(input.data());
-    // int ldb = input.dim(1);
-    int ldb = k;
+    int ldb = input.dim(1);
     DataType*  C = output.data();
-    // int ldc = output.dim(1);
-    int ldc = n;
+    int ldc = output.dim(1);
 
     double time0 = MPI_Wtime();
 
-    gemm(transA, transB, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc); 
+    gemm(transA, transB, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
 
     double time1 = MPI_Wtime();
 
@@ -245,8 +235,8 @@ void LinearGELU<DataType>::forward(const Tensor<DataType>& input, Tensor<DataTyp
     // GELU
     // gelu_navie(output.element_num(), output.data());
     // gelu_exp(output.element_num(), output.data());
-    // gelu_lookup(output.element_num(), output.data());
-    gelu_fastexp_fusion(output.element_num(), output.data());
+    gelu_lookup(output.element_num(), output.data());
+    // gelu_fastexp_fusion(output.element_num(), output.data());
     // gelu_fastexp_simd(output.element_num(), output.data());
     // bias_gelu_exp_fusion(output, bias_);
     // bias_gelu_lookup_fusion(output, bias_);

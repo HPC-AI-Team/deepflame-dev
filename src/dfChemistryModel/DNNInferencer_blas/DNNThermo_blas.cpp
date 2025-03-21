@@ -18,7 +18,16 @@ DNNThermo_blas<DataType>::DNNThermo_blas() {
 
 // TODO: Implement the destructor
 template<typename DataType>
-DNNThermo_blas<DataType>::~DNNThermo_blas() {}
+DNNThermo_blas<DataType>::~DNNThermo_blas() {
+    for(int i = 0;i < model0_.size(); ++i){
+        delete model0_[i];
+    }
+    model0_.clear();
+
+    for(size_t i = 0; i < output_buffer0_.size(); ++i){
+        free(output_buffer0_[i]);
+    }
+}
 
 template<typename DataType>
 void DNNThermo_blas<DataType>::load_models(const std::string dir) {
@@ -102,9 +111,6 @@ void DNNThermo_blas<DataType>::Inference(
     for(size_t i = 0; i < model0_.size(); ++i){
         model0_[i]->reset_timer();
     }
-    // for(size_t i = 0; i < model1_.size(); ++i){
-    //     model1_[i]->reset_timer();
-    // }
     double dnn_infer_start = MPI_Wtime();
     // inference
     // - NN0
@@ -114,35 +120,13 @@ void DNNThermo_blas<DataType>::Inference(
         std::vector<Tensor<DataType>> tensor_list;
         tensor_list.emplace_back(Tensor<DataType>({sample_len, layers0_[0]}, const_cast<DataType*>(input) + sample_start * input_dim0()));
         for(size_t i = 1; i < layers0_.size() - 1; ++i){
-            Tensor<DataType> tensor_test({sample_len, layers0_[i]}, output_buffer0_[i - 1]);
-            tensor_list.emplace_back(tensor_test);
+            tensor_list.emplace_back(Tensor<DataType>({sample_len, layers0_[i]}, output_buffer0_[i - 1]));
         }
         tensor_list.emplace_back(Tensor<DataType>({sample_len, layers0_[layers0_.size() - 1]}, output0 + sample_start * output_dim0()));
-        
         for(size_t i = 0; i < model0_.size(); ++i){
             model0_[i]->forward(tensor_list[i], tensor_list[i+1]);
-
-            double dnn_rever_start = MPI_Wtime();
-
-            DataType* cg = tensor_list[i+1].data();
-            DataType* tmp = (DataType*)aligned_alloc(64, tensor_list[i+1].dim(0) * tensor_list[i+1].dim(1) * sizeof(DataType));
-            for(int ii = 0; ii < tensor_list[i+1].dim(0) * tensor_list[i+1].dim(1); ii++){
-                tmp[ii] = cg[ii];
-            }
-            for(int ii = 0; ii < tensor_list[i+1].dim(0); ii++){
-                for(int jj = 0; jj < tensor_list[i+1].dim(1); jj++){
-                    cg[ii * tensor_list[i+1].dim(1) + jj] = tmp[jj * tensor_list[i+1].dim(0) + ii];
-                }
-            }
-            free(tmp);
-
-            double dnn_rever_end = MPI_Wtime();
-            double dnn_rever_time = dnn_rever_end - dnn_rever_start;
-            //printf("Additional transpose TIME(Thermo) = %f\n", dnn_rever_time);
-
         }
-
-        }
+    }
 
     double dnn_infer_end = MPI_Wtime();
     double dnn_infer_time = dnn_infer_end - dnn_infer_start;

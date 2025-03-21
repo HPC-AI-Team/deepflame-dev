@@ -23,6 +23,7 @@ private:
     bool buffer_alloced_ = false;
     int64_t batch_size_;
     std::vector<DataType*> output_buffer_;
+    double theoretical_tflops_core_;
 public:
 
     int64_t input_dim() const {return layers_.front(); }
