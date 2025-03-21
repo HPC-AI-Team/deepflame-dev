@@ -46,13 +46,7 @@ void bias_gelu_lookup_fusion(Tensor<T>& input, const Tensor<T>& bias);
 extern "C"{
 #endif
 
-// extern void sgemm_(char* transA, char* transB, int* m, int* n, int* k, float* alpha, const float* a, int* lda, const float* b, int* ldb, float* beta, float* c, int* ldc);
-extern void cblas_sgemm(
-    CBLAS_LAYOUT layout, CBLAS_TRANSPOSE TransA,
-    CBLAS_TRANSPOSE TransB, const int M, const int N,
-    const int K, const float alpha, const float *A,
-    const int lda, const float *B, const int ldb,
-    const float beta, float *C, const int ldc);
+extern void sgemm_(char* transA, char* transB, int* m, int* n, int* k, float* alpha, const float* a, int* lda, const float* b, int* ldb, float* beta, float* c, int* ldc);
 extern void dgemm_(char* transA, char* transB, int* m, int* n, int* k, double* alpha, const double* a, int* lda, const double* b, int* ldb, double* beta, double* c, int* ldc);
 
 #ifdef __cplusplus
@@ -102,8 +96,8 @@ void bias_naive(Tensor<T>& input, const Tensor<T>& bias){
 #endif
     for(int64_t r = 0; r < row; ++r){
         for(int64_t c = 0; c < col; ++c){
-            // input_data[r * ld + c] += bias_data[c];
-            input_data[c * row + r] += bias_data[c];
+            input_data[r * ld + c] += bias_data[c];
+            // input_data[c * row + r] += bias_data[c];
         }
     }
 }
