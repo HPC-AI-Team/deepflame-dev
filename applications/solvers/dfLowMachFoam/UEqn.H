@@ -53,7 +53,7 @@ time_monitor_UEqn_pre_check += UEqnClock.timeIncrement();
     // df_UEqnSolve.solve(psi, source, internalCoeffs, boundaryCoeffs);
     matrixPtr->solve(psi, source, internalCoeffs, boundaryCoeffs);
 #else
-    UEqnSolve.solve();
+    UEqn.solve();
 #endif
 
     time_monitor_UEqn_solve += UEqnClock.timeIncrement(); 

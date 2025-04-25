@@ -40,8 +40,10 @@ void BlockPattern::show() const {
     Info << "BlockPattern Info : " << endl;
     Info << "rowBlockCount_ : " << rowBlockCount_ << endl;
     Info << "rowBlockPtr_ : " << rowBlockPtr_ << endl;
+
     if(mpirank == 0){
         for(label rbid = 0; rbid < rowBlockCount_; ++rbid){
+            
             for(label cbid = 0; cbid < rowBlockCount_; ++cbid){
                 // Info << setw(12) << setfill(' ') << blocks_[bid2d(rbid, cbid)].size() << "\t";
                 printf("%12d\t", blocks_[bid2d(rbid, cbid)].size());
@@ -51,25 +53,47 @@ void BlockPattern::show() const {
         }
     }
 
+    label nnz_per_row_block_list[rowBlockCount_];
+    label min_nnz_per_block = 999999999;
+    label max_nnz_per_block = 0;
     label off_diagonal_block_count = 0;
     label total_nnz = 0;
     label off_diagonal_block_nnz = 0;
     for(label rbid = 0; rbid < rowBlockCount_; ++rbid){
+        label nnz_per_row_block = 0;
         for(label cbid = 0; cbid < rowBlockCount_; ++cbid){
-            total_nnz += blocks_[bid2d(rbid, cbid)].size();
             if(rbid != cbid){
                 if (blocks_[bid2d(rbid, cbid)].size() > 0){
                     off_diagonal_block_count++;
                 }
                 off_diagonal_block_nnz += blocks_[bid2d(rbid, cbid)].size();
             }
+            total_nnz += blocks_[bid2d(rbid, cbid)].size();
+            nnz_per_row_block += blocks_[bid2d(rbid, cbid)].size();
         }
+        min_nnz_per_block = std::min(min_nnz_per_block, nnz_per_row_block);
+        max_nnz_per_block = std::max(max_nnz_per_block, nnz_per_row_block);
+        nnz_per_row_block_list[rbid] = nnz_per_row_block;
     }
+
+    double avg_nnz_per_block = (double)total_nnz / (rowBlockCount_);
 
     Info << "off_diagonal_block_count : " << off_diagonal_block_count << endl;
     Info << "off_diagonal_block_nnz : " << off_diagonal_block_nnz << endl;
     Info << "total_nnz : " << total_nnz << endl;
     Info << "off_diagonal_block_nnz / total_nnz : " << (double)off_diagonal_block_nnz / total_nnz * 100 << "%" << endl;
+
+    Info << "avg_nnz_per_block : " << avg_nnz_per_block << endl;
+    Info << "min_nnz_per_block : " << min_nnz_per_block << endl;
+    Info << "max_nnz_per_block : " << max_nnz_per_block << endl;
+
+    double var_nnz_per_block = 0;
+    for(label i = 0; i < rowBlockCount_; ++i){
+        var_nnz_per_block += (nnz_per_row_block_list[i] - avg_nnz_per_block) * (nnz_per_row_block_list[i] - avg_nnz_per_block);
+    }
+    var_nnz_per_block /= rowBlockCount_;
+    Info << "var_nnz_per_block : " << var_nnz_per_block << endl;
+    Info << "var_nnz_per_block : " << std::sqrt(var_nnz_per_block) << endl; 
 }
 
 }
